@@ -5,10 +5,17 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-from .experiment_tracker import create_run_folder
-from .features import depth_edges, edge_map, load_inputs, seg_boundary
-from .proposals import suggest_floors, suggest_repeats_per_floor
-from .scorer import search_best
+# --- Absolute imports for standalone or package mode ---
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(REPO_ROOT / "stg-stsg-model" / "src"))
+
+from experiment_tracker import create_run_folder
+from features import depth_edges, edge_map, load_inputs, seg_boundary
+from proposals import suggest_floors, suggest_repeats_per_floor
+from scorer import search_best
 
 
 def main():
