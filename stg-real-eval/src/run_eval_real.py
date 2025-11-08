@@ -67,9 +67,13 @@ def run_scene(cfg, scene, results_dir: Path):
     extract_scene(scene.dataset, scene.scene_id, [str(f.image_path) for f in frames])
     preds = []
     t0 = time.time()
+    # --- Direct call to native infer_image() ---
     for fr in frames:
-        img = Image.open(fr.image_path).convert("RGB")
-        pred = infer_image(img)  # returns dict with rules/depth/repeats/optionally motion
+        try:
+            pred = infer_image(fr.image_path)  # returns dict with rules/depth/repeats/optionally motion
+        except Exception as exc:  # pragma: no cover
+            print(f"⚠️ Inference failed for {fr.image_path}: {exc}")
+            pred = {"rules": [], "repeats": [0, 0], "depth": 0}
         preds.append(pred)
     runtime = time.time() - t0
 

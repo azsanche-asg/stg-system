@@ -126,3 +126,43 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- New: callable wrapper for programmatic use ---
+def infer_image(image_path_or_array, config_path=None):
+    """
+    Programmatic entry point for STSG inference.
+    Args:
+        image_path_or_array: str (path to image) or np.ndarray (RGB)
+        config_path: optional path to YAML config; defaults to v1_facades.yaml
+    Returns:
+        dict: grammar prediction with keys {rules, repeats, depth, persist_ids, motion}
+    """
+    import tempfile, subprocess, json, os
+    from pathlib import Path
+    import numpy as np
+    import PIL.Image
+
+    # Prepare temp directories
+    with tempfile.TemporaryDirectory() as tmpd:
+        tmp_in = Path(tmpd) / "img.jpg"
+        if isinstance(image_path_or_array, (str, Path)):
+            src_path = Path(image_path_or_array)
+            PIL.Image.open(src_path).convert("RGB").save(tmp_in)
+        else:
+            img = PIL.Image.fromarray(np.asarray(image_path_or_array).astype("uint8"))
+            img.save(tmp_in)
+
+        cfg = config_path or str(Path(__file__).resolve().parents[1] / "configs" / "v1_facades.yaml")
+        cmd = [
+            "python", str(Path(__file__).resolve()),
+            "--images", str(tmp_in.parent),
+            "--out", str(tmpd),
+            "--config", cfg,
+        ]
+        subprocess.run(cmd, check=True, capture_output=True)
+
+        j = Path(tmpd) / f"{tmp_in.stem}_pred.json"
+        if j.exists():
+            return json.loads(j.read_text())
+        return {"rules": [], "repeats": [0, 0], "depth": 0}
