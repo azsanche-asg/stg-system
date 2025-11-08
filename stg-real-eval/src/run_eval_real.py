@@ -8,34 +8,32 @@ Entry point for Block B evaluation on real mini datasets.
 """
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 import numpy as np
 from PIL import Image
 import yaml
 
-import sys
-
 THIS_FILE = Path(__file__).resolve()
+REPO_ROOT = THIS_FILE.parents[2]
 
-if __package__:
-    from .data import NuScenesMini, CityscapesSeq, CMPFacade
-    from .scripts.extract_features import extract_scene
-    from .metrics.temporal import ade_fde, replay_iou, edit_consistency_iou
-    from .metrics.efficiency import footprint
-else:  # Allows `python stg-real-eval/src/run_eval_real.py`
-    pkg_root = THIS_FILE.parent
-    if str(pkg_root) not in sys.path:
-        sys.path.append(str(pkg_root))
-    from data import NuScenesMini, CityscapesSeq, CMPFacade
-    from scripts.extract_features import extract_scene
-    from metrics.temporal import ade_fde, replay_iou, edit_consistency_iou
-    from metrics.efficiency import footprint
+# Allow absolute `stg_real_eval.*` imports when running as a script.
+sys.path.append(str(REPO_ROOT))
+
+from stg_real_eval.src.data import CMPFacade, CityscapesSeq, NuScenesMini
+from stg_real_eval.src.metrics.efficiency import footprint
+from stg_real_eval.src.metrics.temporal import (
+    ade_fde,
+    edit_consistency_iou,
+    replay_iou,
+)
+from stg_real_eval.src.scripts.extract_features import extract_scene
 
 # Reuse model code
-sys.path.append(str(THIS_FILE.parents[2] / "stg-stsg-model" / "src"))
+sys.path.append(str(REPO_ROOT / "stg-stsg-model" / "src"))
 from infer_v1 import infer_image  # expects a PIL/numpy image path, returns JSON-like dict
 
 
