@@ -1,0 +1,53 @@
+{
+  "root": "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo",
+  "dest": "/Users/alejandrosanchezguinea/Documents/source-beyond/stg-system/stg-real-eval/datasets/cityscapes_subset",
+  "num_towns": 2,
+  "num_frames": 20,
+  "seed": 42,
+  "selection": {
+    "stuttgart_02": [
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005202_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_006226_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_006103_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_006014_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005671_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005519_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_006133_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005456_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_005628_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005230_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005222_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005483_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005995_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_006052_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_005969_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005208_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_006198_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/._stuttgart_02_000000_005914_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_006132_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_02/stuttgart_02_000000_005618_leftImg8bit.png"
+    ],
+    "stuttgart_00": [
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000452_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000321_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000570_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000014_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000327_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000267_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000098_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000319_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000441_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000091_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000210_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000190_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000180_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000199_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000137_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000106_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000542_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/._stuttgart_00_000000_000089_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000342_leftImg8bit.png",
+      "/Volumes/Extreme Pro/downloads-Nov2025/leftImg8bit_demoVideo/leftImg8bit/demoVideo/stuttgart_00/stuttgart_00_000000_000500_leftImg8bit.png"
+    ]
+  }
+}
