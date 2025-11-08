@@ -16,15 +16,26 @@ import numpy as np
 from PIL import Image
 import yaml
 
-from .data import NuScenesMini, CityscapesSeq, CMPFacade
-from .scripts.extract_features import extract_scene
-from .metrics.temporal import ade_fde, replay_iou, edit_consistency_iou
-from .metrics.efficiency import footprint
-
-# Reuse model code
 import sys
 
-sys.path.append(str(Path(__file__).resolve().parents[2] / "stg-stsg-model" / "src"))
+THIS_FILE = Path(__file__).resolve()
+
+if __package__:
+    from .data import NuScenesMini, CityscapesSeq, CMPFacade
+    from .scripts.extract_features import extract_scene
+    from .metrics.temporal import ade_fde, replay_iou, edit_consistency_iou
+    from .metrics.efficiency import footprint
+else:  # Allows `python stg-real-eval/src/run_eval_real.py`
+    pkg_root = THIS_FILE.parent
+    if str(pkg_root) not in sys.path:
+        sys.path.append(str(pkg_root))
+    from data import NuScenesMini, CityscapesSeq, CMPFacade
+    from scripts.extract_features import extract_scene
+    from metrics.temporal import ade_fde, replay_iou, edit_consistency_iou
+    from metrics.efficiency import footprint
+
+# Reuse model code
+sys.path.append(str(THIS_FILE.parents[2] / "stg-stsg-model" / "src"))
 from infer_v1 import infer_image  # expects a PIL/numpy image path, returns JSON-like dict
 
 
@@ -101,4 +112,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
