@@ -1,0 +1,22 @@
+features:
+  use_edges: true
+  use_color: true
+  use_depth_edges: true
+  use_seg_masks: true
+  # optional later
+  use_dino: false
+search:
+  floors: [2, 6]
+  repeats: [3, 10]
+  beam_width: 8
+  local_refine: true
+  refine_steps: 5
+loss:
+  lambda_rec: 1.5
+  lambda_mdl: 0.2
+  mdl_beta_depth: 1.0
+io:
+  images_dir: ""
+  aux_suffix:
+    depth: "_depth.npy"
+    mask:  "_mask.npy"

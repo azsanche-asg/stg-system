@@ -1,0 +1,6 @@
+dataset: datasets/synthetic_facades
+experiment_name: facades_demo
+model_checkpoint: ../checkpoints/stsg_pretrained.pt
+ablations: [none, no_repeat, no_split, no_temporal]
+metrics: [rule_f1, ted, regularity_error, mdl, persistence, motion_error]
+output_dir: outputs/facades_demo
