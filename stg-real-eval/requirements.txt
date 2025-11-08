@@ -1,0 +1,10 @@
+# Kept minimal; align with repo roots
+numpy
+pyyaml
+tqdm
+opencv-python
+matplotlib
+# Feature backbones are optional; mocked if missing
+torch
+torchvision
+Pillow

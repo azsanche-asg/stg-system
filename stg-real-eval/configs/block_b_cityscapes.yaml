@@ -1,0 +1,11 @@
+dataset: cityscapes-seq
+paths:
+  seq_root: "/PATH/TO/leftImg8bit_sequence/train"
+  still_root: "/PATH/TO/leftImg8bit/val"
+eval:
+  take_every: 3
+  max_frames: 60
+  image_size: [512, 512]
+outputs:
+  results_dir: "results/block_b/cityscapes"
+  save_json: true

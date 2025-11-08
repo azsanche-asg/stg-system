@@ -1,0 +1,10 @@
+dataset: nuscenes-mini
+paths:
+  root: "/PATH/TO/nuscenes-mini"   # change locally
+eval:
+  take_every: 5
+  max_scenes: 1
+  image_size: [512, 512]
+outputs:
+  results_dir: "results/block_b/nuscenes"
+  save_json: true
