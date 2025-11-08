@@ -13,8 +13,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+import importlib.util
+
 import numpy as np
-from PIL import Image
 import yaml
 
 THIS_FILE = Path(__file__).resolve()
@@ -23,14 +24,24 @@ REPO_ROOT = THIS_FILE.parents[2]
 # Allow absolute `stg_real_eval.*` imports when running as a script.
 sys.path.append(str(REPO_ROOT))
 
-from stg_real_eval.src.data import CMPFacade, CityscapesSeq, NuScenesMini
-from stg_real_eval.src.metrics.efficiency import footprint
-from stg_real_eval.src.metrics.temporal import (
-    ade_fde,
-    edit_consistency_iou,
-    replay_iou,
-)
-from stg_real_eval.src.scripts.extract_features import extract_scene
+# Create a stable module alias for the hyphenated package folder.
+PKG_PATH = REPO_ROOT / "stg-real-eval" / "src"
+if "stg_real_eval" not in sys.modules and PKG_PATH.exists():  # pragma: no cover
+    spec = importlib.util.spec_from_file_location(
+        "stg_real_eval",
+        PKG_PATH / "__init__.py",
+        submodule_search_locations=[str(PKG_PATH)],
+    )
+    if spec and spec.loader:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["stg_real_eval"] = module
+        spec.loader.exec_module(module)
+sys.path.append(str(PKG_PATH))
+
+from stg_real_eval.data import CMPFacade, CityscapesSeq, NuScenesMini
+from stg_real_eval.metrics.efficiency import footprint
+from stg_real_eval.metrics.temporal import ade_fde, edit_consistency_iou, replay_iou
+from stg_real_eval.scripts.extract_features import extract_scene
 
 # Reuse model code
 sys.path.append(str(REPO_ROOT / "stg-stsg-model" / "src"))
