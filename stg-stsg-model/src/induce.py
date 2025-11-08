@@ -1,6 +1,12 @@
 import cv2
 import numpy as np
 
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
 
 def _smooth(values, kernel_size=7):
     k = max(3, kernel_size | 1)

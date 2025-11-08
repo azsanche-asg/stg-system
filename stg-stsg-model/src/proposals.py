@@ -1,7 +1,13 @@
 import cv2
 import numpy as np
 
-from .features import depth_edges, edge_map, seg_boundary
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
+from features import depth_edges, edge_map, seg_boundary
 
 
 def suggest_floors(img_gray, depth=None, mask=None, fmin=2, fmax=6):

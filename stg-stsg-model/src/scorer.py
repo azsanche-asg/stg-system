@@ -1,6 +1,12 @@
 import numpy as np
 
-from .renderer import recon_loss, soft_grid_mask
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
+from renderer import recon_loss, soft_grid_mask
 
 
 def mdl_cost(floors, repeats, beta_depth=1.0):

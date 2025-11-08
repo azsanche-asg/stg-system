@@ -5,6 +5,12 @@ import shutil
 import matplotlib.pyplot as plt
 import pandas as pd
 
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
 
 def create_run_folder(base_out="stg-synthetic-eval/outputs/experiments", config_path=None, tag=None):
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')

@@ -5,6 +5,12 @@ import os
 import cv2
 from tqdm import tqdm
 
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
 from src.induce import induce_stsg_from_image
 from src.utils import stem
 

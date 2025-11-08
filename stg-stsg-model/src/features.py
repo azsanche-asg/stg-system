@@ -2,6 +2,12 @@ import cv2
 import numpy as np
 import os
 
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root / 'stg-stsg-model' / 'src'))
+
 
 def load_inputs(root_dir, stem, aux_suffix):
     image_path = os.path.join(root_dir, f"{stem}.png")
