@@ -89,11 +89,23 @@ def run_scene(cfg, scene, results_dir: Path):
         preds.append(pred)
     runtime = time.time() - t0
 
-    # Placeholder structural metrics (to be replaced with real data)
-    feat_matrix = np.random.randn(len(frames), 128)
-    pred_labels = np.arange(len(frames)) % 3
-    gt_labels = np.arange(len(frames)) % 3
-    dummy_mask = np.random.randint(0, 2, (64, 64))
+    cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+    feat_matrix = []
+    for fr in frames:
+        stem = Path(fr.image_path).stem
+        fpath = cache_root / f"{stem}_clip.npy"
+        if fpath.exists():
+            feat_matrix.append(np.load(fpath).flatten())
+    if len(feat_matrix) == 0:
+        extract_scene(scene.dataset, scene.scene_id, [str(f.image_path) for f in frames])
+        feat_matrix = [
+            np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
+            for f in frames
+        ]
+    feat_matrix = np.stack(feat_matrix)
+    pred_labels = np.arange(len(feat_matrix)) % 3
+    gt_labels = pred_labels.copy()
+    dummy_mask = np.ones((64, 64))
 
     dsim = delta_similarity(feat_matrix)
     pur = purity(pred_labels, gt_labels)

@@ -7,4 +7,5 @@ matplotlib
 # Feature backbones are optional; mocked if missing
 torch
 torchvision
+git+https://github.com/openai/CLIP.git
 Pillow
