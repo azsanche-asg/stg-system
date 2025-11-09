@@ -1,6 +1,6 @@
 dataset: nuscenes-mini
 paths:
-  root: "/PATH/TO/nuscenes-mini"   # change locally
+  root: "/content/nuscenes-mini"   # change locally
 eval:
   take_every: 5
   max_scenes: 1

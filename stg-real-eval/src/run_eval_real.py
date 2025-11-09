@@ -87,7 +87,14 @@ def run_scene(cfg, scene, results_dir: Path):
             pil_images.append(rgb)
             imgs_rgb.append(np.array(rgb))
 
-    ade, fde = ade_fde_from_flow(imgs_rgb)
+    if scene.dataset == "cmp-facade":
+        ade, fde = np.nan, np.nan
+    else:
+        try:
+            ade, fde = ade_fde_from_flow(imgs_rgb)
+        except Exception as exc:
+            print(f"[WARN] Optical flow failed for {scene.dataset}: {exc}")
+            ade, fde = np.nan, np.nan
 
     preds = []
     t0 = time.time()
