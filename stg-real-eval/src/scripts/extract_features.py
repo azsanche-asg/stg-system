@@ -109,9 +109,19 @@ def extract_scene(dataset_name: str, scene_id: str, frame_paths, which=("clip", 
                 except Exception as exc:
                     print(f"[WARN] MiDaS failed on {img_path}: {exc}")
 
-            if "dino" in which and "dino" in models_ready:
+            if "dino" in which:
                 try:
-                    feat = models_ready["dino"](tensor).detach().cpu().numpy()
+                    from torchvision import transforms
+
+                    resize_224 = transforms.Compose(
+                        [
+                            transforms.Resize((224, 224)),
+                            transforms.ToTensor(),
+                        ]
+                    )
+                    im_t = resize_224(img).unsqueeze(0)
+                    dino = _load_dino()
+                    feat = dino(im_t).mean(dim=[2, 3]).detach().cpu().numpy()
                     np.save(root / f"{stem}_dino.npy", feat)
                 except Exception as exc:
                     print(f"[WARN] DINO failed on {img_path}: {exc}")
