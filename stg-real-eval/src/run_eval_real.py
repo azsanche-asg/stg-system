@@ -40,7 +40,7 @@ sys.path.append(str(PKG_PATH))
 
 from stg_real_eval.data import CMPFacade, CityscapesSeq, NuScenesMini
 from stg_real_eval.metrics.efficiency import footprint
-from stg_real_eval.metrics.temporal import ade_fde, edit_consistency_iou, replay_iou
+from stg_real_eval.metrics.temporal import ade_fde_from_flow, replay_iou
 from stg_real_eval.metrics.structural import delta_similarity, purity, facade_grid_score
 from stg_real_eval.scripts.extract_features import extract_scene
 
@@ -75,14 +75,24 @@ def get_scenes(cfg) -> List[Dict[str, Any]]:
 
 def run_scene(cfg, scene, results_dir: Path):
     frames = scene.frames
-    # Feature cache (dummy by default)
-    extract_scene(scene.dataset, scene.scene_id, [str(f.image_path) for f in frames])
+    frame_paths = [str(f.image_path) for f in frames]
+    extract_scene(scene.dataset, scene.scene_id, frame_paths)
+
+    pil_images = []
+    imgs_rgb = []
+    for fr in frames:
+        with Image.open(fr.image_path) as img:
+            rgb = img.convert("RGB")
+            pil_images.append(rgb)
+            imgs_rgb.append(np.array(rgb))
+
+    ade, fde = ade_fde_from_flow(imgs_rgb)
+
     preds = []
     t0 = time.time()
-    # --- Direct call to native infer_image() ---
-    for fr in frames:
+    for pil_img, fr in zip(pil_images, frames):
         try:
-            pred = infer_image(fr.image_path)  # returns dict with rules/depth/repeats/optionally motion
+            pred = infer_image(pil_img)  # returns dict with rules/depth/repeats/optionally motion
         except Exception as exc:  # pragma: no cover
             print(f"⚠️ Inference failed for {fr.image_path}: {exc}")
             pred = {"rules": [], "repeats": [0, 0], "depth": 0}
@@ -90,30 +100,41 @@ def run_scene(cfg, scene, results_dir: Path):
     runtime = time.time() - t0
 
     cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+
+    mask_seq = []
+    for fr in frames:
+        stem = Path(fr.image_path).stem
+        f_midas = cache_root / f"{stem}_midas.npy"
+        if f_midas.exists():
+            depth = np.load(f_midas)
+            mask_seq.append(depth[0] > np.median(depth[0]))
+    rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+
     feat_matrix = []
     for fr in frames:
         stem = Path(fr.image_path).stem
         fpath = cache_root / f"{stem}_clip.npy"
         if fpath.exists():
             feat_matrix.append(np.load(fpath).flatten())
-    if len(feat_matrix) == 0:
-        extract_scene(scene.dataset, scene.scene_id, [str(f.image_path) for f in frames])
+    if not feat_matrix:
+        extract_scene(scene.dataset, scene.scene_id, frame_paths)
         feat_matrix = [
             np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
             for f in frames
+            if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
         ]
-    feat_matrix = np.stack(feat_matrix)
-    pred_labels = np.arange(len(feat_matrix)) % 3
-    gt_labels = pred_labels.copy()
-    dummy_mask = np.ones((64, 64))
 
-    dsim = delta_similarity(feat_matrix)
-    pur = purity(pred_labels, gt_labels)
-    fgrid = facade_grid_score(dummy_mask)
+    if feat_matrix:
+        feat_matrix = np.stack(feat_matrix)
+        pred_labels = np.arange(len(feat_matrix)) % 3
+        gt_labels = pred_labels.copy()
+        dummy_mask = np.ones((64, 64))
+        dsim = delta_similarity(feat_matrix)
+        pur = purity(pred_labels, gt_labels)
+        fgrid = facade_grid_score(dummy_mask)
+    else:
+        dsim = pur = fgrid = np.nan
 
-    # Minimal temporal summaries (if we can make any)
-    ade, fde = ade_fde([], [])  # left as NaN until tracker is plugged in
-    rep_iou = np.nan
     edit_iou = np.nan
 
     out = {
