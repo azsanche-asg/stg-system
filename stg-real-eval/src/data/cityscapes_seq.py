@@ -19,20 +19,24 @@ class CityscapesSeq:
 
     def list_scenes(self) -> List[Scene]:
         scenes = []
-        if self.seq_root.exists():
-            # Take the first city folder with images
-            cities = sorted([p for p in self.seq_root.glob("*/*") if p.is_dir()])
-            if cities:
-                imgs = sorted(cities[0].glob("*.png"))
-                subs = imgs[::self.take_every][: self.max_frames]
-                sid = f"cityseq_{cities[0].name}"
-                scenes.append(
-                    Scene(
-                        dataset="cityscapes-seq",
-                        scene_id=sid,
-                        frames=[to_frame(p, sid, p.stem) for p in subs],
-                    )
-                )
+        root = self.seq_root
+        if not root.exists():
+            return scenes
+
+        # Case A: two-level layout, e.g. .../leftImg8bit_sequence/train/<city>/<frames>
+        level2 = [p for p in root.glob("*/*") if p.is_dir()]
+        # Case B: one-level layout, e.g. .../cityscapes_subset/<town>/<frames>
+        level1 = [p for p in root.glob("*") if p.is_dir()] if not level2 else []
+
+        seq_dirs = level2 if level2 else level1
+        for seq_dir in sorted(seq_dirs):
+            imgs = sorted(seq_dir.glob("*.png"))
+            if not imgs:
+                continue
+            subs = imgs[::self.take_every][: self.max_frames]
+            sid = seq_dir.name
+            frames = [to_frame(p, sid, p.stem) for p in subs]
+            scenes.append(Scene(dataset="cityscapes-seq", scene_id=sid, frames=frames))
         return scenes
 
     def list_stills(self) -> List[Scene]:
@@ -50,4 +54,3 @@ class CityscapesSeq:
                 frames=[to_frame(p, sid, p.stem) for p in imgs],
             )
         ]
-
