@@ -55,7 +55,10 @@ def parse_results():
         metrics_by_ds[ds]["ReplayIoU"].append(m.get("replay_iou", np.nan))
     rows = []
     for ds, metrics in metrics_by_ds.items():
-        avg = {k: float(np.nanmean(v)) if v else np.nan for k, v in metrics.items()}
+        avg = {}
+        for k, vals in metrics.items():
+            arr = np.array([x for x in vals if not np.isnan(x)])
+            avg[k] = float(arr.mean()) if len(arr) > 0 else np.nan
         ade_norm = avg["ADE"] / 10.0 if not np.isnan(avg["ADE"]) else 0
         fde_norm = avg["FDE"] / 10.0 if not np.isnan(avg["FDE"]) else 0
         avg["Score"] = avg["ΔSim"] + avg["Purity"] + avg["ReplayIoU"] - 0.5 * (ade_norm + fde_norm)
@@ -104,3 +107,13 @@ if not df.empty:
         best = df_ds.loc[df_ds["Score"].idxmax()]
         print(f"\n[{ds}]")
         print(best.to_string())
+
+    ds_groups = df.groupby("dataset", dropna=True)
+    ds_scores = []
+    for ds, sub in ds_groups:
+        ds_scores.append(sub["Score"].mean(skipna=True))
+    if ds_scores:
+        global_mean = np.mean(ds_scores)
+        print(f"\n=== Global average score across datasets: {global_mean:.3f} ===")
+    else:
+        print("\n=== No valid dataset scores to average ===")

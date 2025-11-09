@@ -117,6 +117,8 @@ def run_scene(cfg, scene, results_dir: Path):
             depth = np.load(f_midas)
             mask_seq.append(depth[0] > np.median(depth[0]))
     rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+    if scene.dataset == "cmp-facade":
+        rep_iou = np.nan
 
     feat_matrix = []
     for fr in frames:
