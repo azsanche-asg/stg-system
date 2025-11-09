@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torchvision.models as models
+from torchvision import transforms
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from PIL import Image
 
@@ -20,6 +21,10 @@ except ImportError as exc:  # pragma: no cover
 from ..utils.paths import dataset_cache_root
 
 _midas = _dino = _clip = _clip_pre = None
+
+
+def _device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _BASE_TRANSFORM = Compose(
     [
         Resize(384),
@@ -68,30 +73,20 @@ def extract_scene(dataset_name: str, scene_id: str, frame_paths, which=("clip", 
     env = os.environ.get("STG_FEATURES")
     if env:
         which = tuple([w.strip() for w in env.split(",") if w.strip()])
+    device = _device()
     root = dataset_cache_root(dataset_name) / scene_id
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     root.mkdir(parents=True, exist_ok=True)
 
-    models_ready = {}
+    midas = _load_midas() if "midas" in which else None
+    dino = _load_dino() if "dino" in which else None
+    clip_model, clip_pre = _load_clip() if "clip" in which else (None, None)
 
-    if "midas" in which:
-        try:
-            models_ready["midas"] = _load_midas().to(device)
-        except Exception as exc:  # pragma: no cover
-            print(f"[WARN] MiDaS failed to load: {exc}")
-
-    if "dino" in which:
-        try:
-            models_ready["dino"] = _load_dino().to(device)
-        except Exception as exc:  # pragma: no cover
-            print(f"[WARN] DINO failed to load: {exc}")
-
-    if "clip" in which:
-        try:
-            clip_model, clip_pre = _load_clip()
-            models_ready["clip"] = (clip_model.to(device), clip_pre)
-        except Exception as exc:  # pragma: no cover
-            print(f"[WARN] CLIP failed to load: {exc}")
+    if midas is not None:
+        midas = midas.to(device)
+    if dino is not None:
+        dino = dino.to(device)
+    if clip_model is not None:
+        clip_model = clip_model.to(device)
 
     if "sam" in which:
         _load_sam()
@@ -101,42 +96,41 @@ def extract_scene(dataset_name: str, scene_id: str, frame_paths, which=("clip", 
         stem = Path(img_path).stem
         tensor = _to_tensor(img).to(device)
 
-        with torch.no_grad():
-            if "midas" in which and "midas" in models_ready:
-                try:
-                    depth = models_ready["midas"](tensor).detach().cpu().numpy()
-                    np.save(root / f"{stem}_midas.npy", depth)
-                except Exception as exc:
-                    print(f"[WARN] MiDaS failed on {img_path}: {exc}")
+        if "midas" in which and midas is not None:
+            try:
+                with torch.no_grad():
+                    depth = midas(tensor).detach().cpu().numpy()
+                np.save(root / f"{stem}_midas.npy", depth)
+            except Exception as exc:
+                print(f"[WARN] MiDaS failed on {img_path}: {exc}")
 
-            if "dino" in which:
-                try:
-                    from torchvision import transforms
+        if "dino" in which and dino is not None:
+            try:
+                resize_224 = transforms.Compose(
+                    [
+                        transforms.Resize((224, 224)),
+                        transforms.ToTensor(),
+                    ]
+                )
+                im_t = resize_224(img).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    logits = dino(im_t)
+                feat = logits.detach().cpu().numpy().reshape(-1)
+                np.save(root / f"{stem}_dino.npy", feat)
+            except Exception as exc:
+                print(f"[WARN] DINO failed on {img_path}: {exc}")
 
-                    resize_224 = transforms.Compose(
-                        [
-                            transforms.Resize((224, 224)),
-                            transforms.ToTensor(),
-                        ]
-                    )
-                    im_t = resize_224(img).unsqueeze(0)
-                    dino = _load_dino()
-                    feat = dino(im_t).mean(dim=[2, 3]).detach().cpu().numpy()
-                    np.save(root / f"{stem}_dino.npy", feat)
-                except Exception as exc:
-                    print(f"[WARN] DINO failed on {img_path}: {exc}")
-
-            if "clip" in which and "clip" in models_ready:
-                try:
-                    clip_model, clip_pre = models_ready["clip"]
+        if "clip" in which and clip_model is not None:
+            try:
+                with torch.no_grad():
                     im_proc = clip_pre(img).unsqueeze(0).to(device)
-                    feat = clip_model.encode_image(im_proc).cpu().numpy()
-                    np.save(root / f"{stem}_clip.npy", feat)
-                except Exception as exc:
-                    print(f"[WARN] CLIP failed on {img_path}: {exc}")
+                    feat = clip_model.encode_image(im_proc).detach().cpu().numpy().reshape(-1)
+                np.save(root / f"{stem}_clip.npy", feat)
+            except Exception as exc:
+                print(f"[WARN] CLIP failed on {img_path}: {exc}")
 
-            if "sam" in which:
-                print(f"[INFO] SAM skipped for {img_path} (disabled).")
+        if "sam" in which:
+            print(f"[INFO] SAM skipped for {img_path} (disabled).")
 
     print(f"✅ Cached {len(frame_paths)} frames for {dataset_name}/{scene_id} using features: {which}")
 
