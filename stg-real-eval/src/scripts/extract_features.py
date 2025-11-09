@@ -92,7 +92,11 @@ def extract_scene(dataset_name: str, scene_id: str, frame_paths, which=("clip", 
         _load_sam()
 
     for img_path in frame_paths:
-        img = Image.open(img_path).convert("RGB")
+        try:
+            img = Image.open(img_path).convert("RGB")
+        except Exception as exc:
+            print(f"[WARN] Skipping unreadable image: {img_path} ({exc})")
+            continue
         stem = Path(img_path).stem
         tensor = _to_tensor(img).to(device)
 

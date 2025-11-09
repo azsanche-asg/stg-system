@@ -39,7 +39,10 @@ def select_images(root: Path, num_towns: int, num_frames: int) -> Dict[str, List
     chosen_towns = random.sample(towns, k=min(num_towns, len(towns)))
     selection = {}
     for t in chosen_towns:
-        imgs = sorted(list(t.glob("*.png")) + list(t.glob("*.jpg")))
+        imgs_all = list(t.glob("*.png")) + list(t.glob("*.jpg"))
+        imgs = sorted(
+            [p for p in imgs_all if p.is_file() and not p.name.startswith(".") and not p.name.startswith("._")]
+        )
         if not imgs:
             continue
         selected_imgs = random.sample(imgs, k=min(num_frames, len(imgs)))
@@ -107,4 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -30,7 +30,11 @@ class CityscapesSeq:
 
         seq_dirs = level2 if level2 else level1
         for seq_dir in sorted(seq_dirs):
-            imgs = sorted(seq_dir.glob("*.png"))
+            imgs = [
+                p
+                for p in sorted(seq_dir.glob("*.png"))
+                if p.is_file() and not p.name.startswith(".") and not p.name.startswith("._")
+            ]
             if not imgs:
                 continue
             subs = imgs[::self.take_every][: self.max_frames]
