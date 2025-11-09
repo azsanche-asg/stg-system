@@ -33,22 +33,35 @@ def run_eval(cfg_path):
 
 def parse_results():
     all_jsons = list(results_root.glob("block_b/*/*.json"))
-    metrics = {"ΔSim": [], "Purity": [], "ADE": [], "FDE": [], "ReplayIoU": []}
+    metrics_by_ds = {}
     for f in all_jsons:
         try:
             data = json.loads(f.read_text())
         except json.JSONDecodeError as exc:
             print(f"[WARN] Failed to parse {f}: {exc}")
             continue
-        m = data.get("metrics", {})
-        metrics["ΔSim"].append(m.get("delta_similarity", np.nan))
-        metrics["Purity"].append(m.get("purity", np.nan))
-        metrics["ADE"].append(m.get("ade", np.nan))
-        metrics["FDE"].append(m.get("fde", np.nan))
-        metrics["ReplayIoU"].append(m.get("replay_iou", np.nan))
-    avg = {k: float(np.nanmean(v)) if v else np.nan for k, v in metrics.items()}
-    avg["Score"] = avg["ΔSim"] + avg["Purity"] + avg["ReplayIoU"] - 0.5 * (avg["ADE"] + avg["FDE"])
-    return avg
+        ds = data.get("dataset", "unknown")
+        m = data.get("metrics", {}) or {}
+        if ds == "cmp-facade":
+            m.pop("ade", None)
+            m.pop("fde", None)
+        metrics_by_ds.setdefault(
+            ds, {"ΔSim": [], "Purity": [], "ADE": [], "FDE": [], "ReplayIoU": []}
+        )
+        metrics_by_ds[ds]["ΔSim"].append(m.get("delta_similarity", np.nan))
+        metrics_by_ds[ds]["Purity"].append(m.get("purity", np.nan))
+        metrics_by_ds[ds]["ADE"].append(m.get("ade", np.nan))
+        metrics_by_ds[ds]["FDE"].append(m.get("fde", np.nan))
+        metrics_by_ds[ds]["ReplayIoU"].append(m.get("replay_iou", np.nan))
+    rows = []
+    for ds, metrics in metrics_by_ds.items():
+        avg = {k: float(np.nanmean(v)) if v else np.nan for k, v in metrics.items()}
+        ade_norm = avg["ADE"] / 10.0 if not np.isnan(avg["ADE"]) else 0
+        fde_norm = avg["FDE"] / 10.0 if not np.isnan(avg["FDE"]) else 0
+        avg["Score"] = avg["ΔSim"] + avg["Purity"] + avg["ReplayIoU"] - 0.5 * (ade_norm + fde_norm)
+        avg["dataset"] = ds
+        rows.append(avg)
+    return rows
 
 
 for features, lam, beam in combos:
@@ -69,16 +82,25 @@ for features, lam, beam in combos:
         except subprocess.CalledProcessError as exc:
             print(f"[WARN] Run failed for {cfg_file}: {exc}")
 
-    avg = parse_results()
-    avg.update({"features": features, "lambda": lam, "beam": beam})
-    log_rows.append(avg)
+    avg_rows = parse_results()
+    for row in avg_rows:
+        row.update({"features": features, "lambda": lam, "beam": beam})
+        log_rows.append(row)
 
 df = pd.DataFrame(log_rows)
 log_path = results_root / "tuning_log.csv"
 df.to_csv(log_path, index=False)
-print("\n=== Tuning summary ===")
+print("\n=== Global tuning summary (all datasets combined) ===")
 if not df.empty:
     print(df.sort_values("Score", ascending=False).to_string(index=False, float_format="%.3f"))
 else:
     print("No successful runs recorded.")
 print("\nCSV written to", log_path)
+
+if not df.empty:
+    print("\n=== Best configurations per dataset ===")
+    for ds in df["dataset"].dropna().unique():
+        df_ds = df[df["dataset"] == ds]
+        best = df_ds.loc[df_ds["Score"].idxmax()]
+        print(f"\n[{ds}]")
+        print(best.to_string())
