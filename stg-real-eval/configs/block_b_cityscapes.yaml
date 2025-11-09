@@ -1,7 +1,8 @@
 dataset: cityscapes-seq
 paths:
-  seq_root: "/PATH/TO/leftImg8bit_sequence/train"
-  still_root: "/PATH/TO/leftImg8bit/val"
+  seq_root: /content/stg-system-main/stg-real-eval/datasets/cityscapes_subset/stuttgart_00
+  #seq_root: "/PATH/TO/leftImg8bit_sequence/train"
+  #still_root: "/PATH/TO/leftImg8bit/val"
 eval:
   take_every: 3
   max_frames: 60
