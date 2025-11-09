@@ -12,6 +12,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List
+from PIL import Image
 
 import importlib.util
 
