@@ -62,6 +62,10 @@ try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
+try:
+    from stg_real_eval.metrics.temporal_slots import match_slots_across_frames
+except Exception:  # pragma: no cover
+    match_slots_across_frames = None
 
 # Reuse model code
 sys.path.append(str(REPO_ROOT / "stg-stsg-model" / "src"))
@@ -180,8 +184,28 @@ def run_scene(cfg, scene, results_dir: Path):
             refined_preds.append(new_pred)
         preds = refined_preds
 
+    mask_seq_slot = None
+    if model_type == "slot" and match_slots_across_frames is not None:
+        slot_masks_seq = []
+        slot_embs_seq = []
+        valid_slots = True
+        for pred in preds:
+            sms = pred.get("slot_masks")
+            ems = pred.get("slot_embs")
+            if sms is None or ems is None:
+                valid_slots = False
+                break
+            slot_masks_seq.append([np.array(m, dtype=bool) for m in sms])
+            slot_embs_seq.append([np.array(e, dtype=np.float32) for e in ems])
+        if valid_slots and slot_masks_seq:
+            matched = match_slots_across_frames(slot_masks_seq, slot_embs_seq, alpha=0.5)
+            if matched:
+                mask_seq_slot = [np.array(m, dtype=bool) for m in matched]
+
     mask_seq = []
-    if model_type in ("raster", "slot", "raster_crf"):
+    if mask_seq_slot is not None:
+        mask_seq = mask_seq_slot
+    elif model_type in ("raster", "slot", "raster_crf"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
