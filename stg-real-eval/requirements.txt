@@ -10,3 +10,4 @@ torchvision
 git+https://github.com/openai/CLIP.git
 Pillow
 pandas
+pydensecrf>=1.0

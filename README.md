@@ -24,3 +24,13 @@ Copy code
 
 ### Snapshot
 Frozen as **v1_static_baseline** (Block A complete).
+
+### Raster + CRF baseline (Block B)
+Run the classical raster baseline with DenseCRF smoothing:
+```bash
+BASELINE=raster_crf python stg-real-eval/src/run_eval_real.py \
+  --config stg-real-eval/configs/block_b_cityscapes.yaml
+```
+or set `model: raster_crf` inside the config. Outputs include binary masks under
+`raster_crf_masks/` and the `repeat_peaks_x` proxy. If `pydensecrf` is unavailable,
+the code gracefully falls back to the pre-CRF probabilities so runs still complete.

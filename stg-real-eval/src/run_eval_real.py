@@ -47,11 +47,15 @@ from stg_real_eval.metrics.structural import delta_similarity, purity, facade_gr
 from stg_real_eval.scripts.extract_features import extract_scene
 
 try:
-    from stg_real_eval.src.baselines.raster_proxy import infer_raster_baseline
+    from stg_real_eval.baselines.raster_proxy import infer_raster_baseline
 except Exception:  # pragma: no cover
     infer_raster_baseline = None
 try:
-    from stg_real_eval.src.baselines.slot_attention_proxy import infer_slot_baseline
+    from stg_real_eval.baselines.raster_crf import raster_with_crf
+except Exception:  # pragma: no cover
+    raster_with_crf = None
+try:
+    from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
 
@@ -93,7 +97,7 @@ def run_scene(cfg, scene, results_dir: Path):
         model_type = cfg.get("model", "stsg")
     print(f"⚙️  Model type selected: {model_type}")
 
-    if model_type not in ("raster", "slot"):
+    if model_type not in ("raster", "slot", "raster_crf"):
         extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     pil_images = []
@@ -124,6 +128,15 @@ def run_scene(cfg, scene, results_dir: Path):
                 print(f"⚠️  Slot baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
+    elif model_type == "raster_crf" and raster_with_crf is not None:
+        print("🧮  Raster+CRF baseline branch entered; running proxy inference...")
+        for pil_img, fr in zip(pil_images, frames):
+            try:
+                pred = raster_with_crf(pil_img)
+            except Exception as exc:
+                print(f"⚠️ Raster+CRF baseline failed for {fr.image_path}: {exc}")
+                pred = {"rules": [], "repeats": [0, 0], "depth": 0}
+            preds.append(pred)
     elif model_type == "raster" and infer_raster_baseline is not None:
         print("🧮  Raster baseline branch entered; running proxy inference...")
         for pil_img, fr in zip(pil_images, frames):
@@ -146,7 +159,7 @@ def run_scene(cfg, scene, results_dir: Path):
     cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
 
     mask_seq = []
-    if model_type in ("raster", "slot"):
+    if model_type in ("raster", "slot", "raster_crf"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
@@ -163,7 +176,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot"):
+    if model_type in ("raster", "slot", "raster_crf"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
