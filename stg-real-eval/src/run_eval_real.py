@@ -83,13 +83,14 @@ def get_scenes(cfg) -> List[Dict[str, Any]]:
 def run_scene(cfg, scene, results_dir: Path):
     frames = scene.frames
     frame_paths = [str(f.image_path) for f in frames]
-    extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     model_type = os.environ.get("BASELINE")
     if not model_type:
         model_type = cfg.get("model", "stsg")
     print(f"⚙️  Model type selected: {model_type}")
-    
+
+    if model_type != "raster":
+        extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     pil_images = []
     imgs_rgb = []
@@ -111,7 +112,7 @@ def run_scene(cfg, scene, results_dir: Path):
     preds = []
     t0 = time.time()
     if model_type == "raster" and infer_raster_baseline is not None:
-        print("🧮  Raster baseline branch entered; running proxy inference...")  # <— add this line
+        print("🧮  Raster baseline branch entered; running proxy inference...")
         for pil_img, fr in zip(pil_images, frames):
             try:
                 pred = infer_raster_baseline(pil_img)
@@ -132,29 +133,42 @@ def run_scene(cfg, scene, results_dir: Path):
     cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
 
     mask_seq = []
-    for fr in frames:
-        stem = Path(fr.image_path).stem
-        f_midas = cache_root / f"{stem}_midas.npy"
-        if f_midas.exists():
-            depth = np.load(f_midas)
-            mask_seq.append(depth[0] > np.median(depth[0]))
+    if model_type == "raster":
+        for pred in preds:
+            proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
+            if proxy is not None:
+                mask_seq.append(np.array(proxy, dtype=bool))
+    else:
+        for fr in frames:
+            stem = Path(fr.image_path).stem
+            f_midas = cache_root / f"{stem}_midas.npy"
+            if f_midas.exists():
+                depth = np.load(f_midas)
+                mask_seq.append(depth[0] > np.median(depth[0]))
     rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
     if scene.dataset == "cmp-facade":
         rep_iou = np.nan
 
     feat_matrix = []
-    for fr in frames:
-        stem = Path(fr.image_path).stem
-        fpath = cache_root / f"{stem}_clip.npy"
-        if fpath.exists():
-            feat_matrix.append(np.load(fpath).flatten())
-    if not feat_matrix:
-        extract_scene(scene.dataset, scene.scene_id, frame_paths)
-        feat_matrix = [
-            np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
-            for f in frames
-            if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
-        ]
+    if model_type == "raster":
+        for fr in frames:
+            with Image.open(fr.image_path) as _im:
+                gray = np.array(_im.convert("L"))
+            hist, _ = np.histogram(gray, bins=128, range=(0, 255), density=True)
+            feat_matrix.append(hist.astype(np.float32))
+    else:
+        for fr in frames:
+            stem = Path(fr.image_path).stem
+            fpath = cache_root / f"{stem}_clip.npy"
+            if fpath.exists():
+                feat_matrix.append(np.load(fpath).flatten())
+        if not feat_matrix:
+            extract_scene(scene.dataset, scene.scene_id, frame_paths)
+            feat_matrix = [
+                np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
+                for f in frames
+                if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
+            ]
 
     if feat_matrix:
         feat_matrix = np.stack(feat_matrix)

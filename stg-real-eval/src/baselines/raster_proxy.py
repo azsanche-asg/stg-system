@@ -15,7 +15,7 @@ def _estimate_vertical_repeats(gray):
     sig = (sig - sig.mean()) / (sig.std() + 1e-6)
     ac = np.correlate(sig, sig, mode="full")[len(sig) - 1 :]
     ac[:5] = 0
-    k = np.argmax(ac)
+    k = int(np.argmax(ac))
     if k <= 0:
         return 1
     repeats = max(1, int(gray.shape[1] / max(8, k)))
@@ -29,11 +29,11 @@ def _estimate_horizontal_splits(gray):
     peaks = np.where(sig > thr)[0]
     if len(peaks) < 2:
         return 1
-    _sep = max(4, gray.shape[0] // 20)
+    sep = max(4, gray.shape[0] // 20)
     count = 1
     last = peaks[0]
     for p in peaks[1:]:
-        if p - last > _sep:
+        if p - last > sep:
             count += 1
             last = p
     return int(np.clip(count, 1, 30))
@@ -48,12 +48,10 @@ def _edge_mask(gray):
 def infer_raster_baseline(pil_img: Image.Image):
     img = np.array(pil_img.convert("RGB"))
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
     floors = _estimate_horizontal_splits(gray)
     repeats = _estimate_vertical_repeats(gray)
     mask = _edge_mask(gray)
-
-    grammar = {
+    return {
         "rules": [f"Split_y_{floors}", f"Repeat_x_{repeats}"],
         "repeats": [int(floors), int(repeats)],
         "depth": 2,
@@ -61,4 +59,3 @@ def infer_raster_baseline(pil_img: Image.Image):
         "motion": [],
         "proxy_mask": mask.astype(np.uint8).tolist(),
     }
-    return grammar
