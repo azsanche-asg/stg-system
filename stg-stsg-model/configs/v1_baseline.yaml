@@ -1,0 +1,38 @@
+# stg-stsg-model/configs/v1_baseline.yaml
+# === Frozen STSG Baseline Reference ===
+# Derived from v1_facades.yaml tuned with features=clip,dino,midas; λ=1.0; beam=5
+
+features:
+  use_edges: true
+  use_color: true
+  use_depth_edges: true
+  use_seg_masks: true
+  use_dino: true   # <-- enabled per tuned best config
+
+search:
+  floors: [2, 6]
+  repeats: [3, 10]
+  beam_width: 5     # <-- tuned beam width
+  local_refine: true
+  refine_steps: 5
+
+weights:            # <-- add these
+  lambda_split: 1.0
+  lambda_repeat: 1.0
+  lambda_render: 1.0
+
+loss:
+  lambda_rec: 1.5
+  lambda_mdl: 0.2
+  mdl_beta_depth: 1.0
+
+io:
+  images_dir: ""
+  aux_suffix:
+    depth: "_depth.npy"
+    mask:  "_mask.npy"
+
+info:
+  created_by: "Baseline freeze"
+  date: "2025-11-10"
+  description: "Frozen STSG configuration (clip,dino,midas; λ=1.0; beam=5)"
