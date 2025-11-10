@@ -59,9 +59,12 @@ def parse_results():
         for k, vals in metrics.items():
             arr = np.array([x for x in vals if not np.isnan(x)])
             avg[k] = float(arr.mean()) if len(arr) > 0 else np.nan
-        ade_norm = avg["ADE"] / 10.0 if not np.isnan(avg["ADE"]) else 0
-        fde_norm = avg["FDE"] / 10.0 if not np.isnan(avg["FDE"]) else 0
-        avg["Score"] = avg["ΔSim"] + avg["Purity"] + avg["ReplayIoU"] - 0.5 * (ade_norm + fde_norm)
+        ade_norm = np.nan_to_num(avg.get("ADE", np.nan) / 10.0, nan=0.0)
+        fde_norm = np.nan_to_num(avg.get("FDE", np.nan) / 10.0, nan=0.0)
+        r_iou = np.nan_to_num(avg.get("ReplayIoU", np.nan), nan=0.0)
+        dsim = np.nan_to_num(avg.get("ΔSim", np.nan), nan=0.0)
+        pur = np.nan_to_num(avg.get("Purity", np.nan), nan=0.0)
+        avg["Score"] = dsim + pur + r_iou - 0.5 * (ade_norm + fde_norm)
         avg["dataset"] = ds
         rows.append(avg)
     return rows
@@ -104,7 +107,11 @@ if not df.empty:
     print("\n=== Best configurations per dataset ===")
     for ds in df["dataset"].dropna().unique():
         df_ds = df[df["dataset"] == ds]
-        best = df_ds.loc[df_ds["Score"].idxmax()]
+        df_valid = df_ds.dropna(subset=["Score"])
+        if df_valid.empty:
+            print(f"\n[{ds}] No valid scores (all NaN).")
+            continue
+        best = df_valid.loc[df_valid["Score"].idxmax()]
         print(f"\n[{ds}]")
         print(best.to_string())
 
