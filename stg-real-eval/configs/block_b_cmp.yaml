@@ -7,3 +7,4 @@ eval:
 outputs:
   results_dir: "results/block_b/cmp"
   save_json: true
+model: stsg

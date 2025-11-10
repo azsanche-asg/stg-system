@@ -8,3 +8,4 @@ eval:
 outputs:
   results_dir: "results/block_b/nuscenes"
   save_json: true
+model: stsg

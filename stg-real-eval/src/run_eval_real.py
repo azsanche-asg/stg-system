@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 from PIL import Image
+import os
 
 import importlib.util
 
@@ -44,6 +45,11 @@ from stg_real_eval.metrics.efficiency import footprint
 from stg_real_eval.metrics.temporal import ade_fde_from_flow, replay_iou
 from stg_real_eval.metrics.structural import delta_similarity, purity, facade_grid_score
 from stg_real_eval.scripts.extract_features import extract_scene
+
+try:
+    from stg_real_eval.src.baselines.raster_proxy import infer_raster_baseline
+except Exception:  # pragma: no cover
+    infer_raster_baseline = None
 
 # Reuse model code
 sys.path.append(str(REPO_ROOT / "stg-stsg-model" / "src"))
@@ -79,6 +85,10 @@ def run_scene(cfg, scene, results_dir: Path):
     frame_paths = [str(f.image_path) for f in frames]
     extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
+    model_type = os.environ.get("BASELINE")
+    if not model_type:
+        model_type = cfg.get("model", "stsg")
+
     pil_images = []
     imgs_rgb = []
     for fr in frames:
@@ -98,13 +108,22 @@ def run_scene(cfg, scene, results_dir: Path):
 
     preds = []
     t0 = time.time()
-    for pil_img, fr in zip(pil_images, frames):
-        try:
-            pred = infer_image(pil_img)  # returns dict with rules/depth/repeats/optionally motion
-        except Exception as exc:  # pragma: no cover
-            print(f"⚠️ Inference failed for {fr.image_path}: {exc}")
-            pred = {"rules": [], "repeats": [0, 0], "depth": 0}
-        preds.append(pred)
+    if model_type == "raster" and infer_raster_baseline is not None:
+        for pil_img, fr in zip(pil_images, frames):
+            try:
+                pred = infer_raster_baseline(pil_img)
+            except Exception as exc:
+                print(f"⚠️ Raster baseline failed for {fr.image_path}: {exc}")
+                pred = {"rules": [], "repeats": [0, 0], "depth": 0}
+            preds.append(pred)
+    else:
+        for pil_img, fr in zip(pil_images, frames):
+            try:
+                pred = infer_image(pil_img)
+            except Exception as exc:
+                print(f"⚠️ Inference failed for {fr.image_path}: {exc}")
+                pred = {"rules": [], "repeats": [0, 0], "depth": 0}
+            preds.append(pred)
     runtime = time.time() - t0
 
     cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id

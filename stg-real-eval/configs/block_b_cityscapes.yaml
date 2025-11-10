@@ -10,3 +10,4 @@ eval:
 outputs:
   results_dir: "results/block_b/cityscapes"
   save_json: true
+model: stsg
