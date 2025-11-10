@@ -88,6 +88,8 @@ def run_scene(cfg, scene, results_dir: Path):
     model_type = os.environ.get("BASELINE")
     if not model_type:
         model_type = cfg.get("model", "stsg")
+    print(f"⚙️  Model type selected: {model_type}")
+    
 
     pil_images = []
     imgs_rgb = []
