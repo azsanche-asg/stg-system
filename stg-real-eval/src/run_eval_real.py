@@ -111,6 +111,7 @@ def run_scene(cfg, scene, results_dir: Path):
     preds = []
     t0 = time.time()
     if model_type == "raster" and infer_raster_baseline is not None:
+        print("🧮  Raster baseline branch entered; running proxy inference...")  # <— add this line
         for pil_img, fr in zip(pil_images, frames):
             try:
                 pred = infer_raster_baseline(pil_img)
