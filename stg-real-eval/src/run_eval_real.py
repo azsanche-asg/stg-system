@@ -140,7 +140,7 @@ def run_scene(cfg, scene, results_dir: Path):
         model_type = cfg.get("model", "stsg")
     print(f"⚙️  Model type selected: {model_type}")
 
-    if model_type not in ("raster", "raster_crf", "dino_cluster"):
+    if model_type not in ("raster", "raster_crf", "dino_cluster", "gs_proxy"):
         extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     pil_images = []
