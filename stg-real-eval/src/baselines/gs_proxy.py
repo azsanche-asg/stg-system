@@ -158,6 +158,11 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     depth = np.squeeze(depth)  # <-- add this
     if depth.ndim != 2:
         depth = depth[..., 0]  # final fallback
+    # 🔧 Resize depth to match RGB resolution
+    if depth.shape != rgb.shape[:2]:
+        from PIL import Image
+        h, w = rgb.shape[:2]
+        depth = np.array(Image.fromarray(depth).resize((w, h), resample=Image.BILINEAR), dtype=np.float32)
     masks, _ = _depth_bands(depth, k=4)
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
