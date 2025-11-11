@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
-#from PIL import Image
+from PIL import Image
 from sklearn.cluster import KMeans
 
 
@@ -134,41 +134,35 @@ def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarra
 def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) -> Dict[str, Any]:
     """
     Plug-compatible entry point (structured like your DINO Cluster baseline).
-
-    Returns:
-      rules: []               # keep for compatibility
-      repeats: [rx, ry]       # ints, x then y
-      motion: []              # keep for compatibility
-      proxy_mask: (H,W) uint8 0/255 – largest depth band
-      slot_masks: list[(H,W) bool] – masks for each depth band
-      cluster_feats: list[np.ndarray len=34] – per-band descriptors
-      avg_sim: float – quick scalar for logging
     """
     image_path = Path(image_path)
     depth_cache_dir = Path(depth_cache_dir)
 
+    # --- Load RGB ---
     with Image.open(image_path) as im:
         rgb = np.array(im.convert("RGB"))
 
-    #depth = _load_depth_from_cache(image_path, depth_cache_dir)
+    # --- Load and prepare depth ---
     depth = _load_depth_from_cache(image_path, depth_cache_dir)
-    # Ensure single-channel depth (sometimes MiDaS saves 3-channel pseudo-RGB depth)
-    #if depth.ndim == 3:
-    #    depth = depth[..., 0]
-    depth = np.squeeze(depth)  # <-- add this
+    depth = np.squeeze(depth)
     if depth.ndim != 2:
         depth = depth[..., 0]  # final fallback
-    # 🔧 Resize depth to match RGB resolution
+
+    # 🔧 Resize depth to match RGB resolution (uses global Image import!)
     if depth.shape != rgb.shape[:2]:
-        from PIL import Image
         h, w = rgb.shape[:2]
-        depth = np.array(Image.fromarray(depth).resize((w, h), resample=Image.BILINEAR), dtype=np.float32)
+        depth_img = Image.fromarray(depth)
+        depth_resized = depth_img.resize((w, h), resample=Image.BILINEAR)
+        depth = np.array(depth_resized, dtype=np.float32)
+
+    # --- Core geometry clustering ---
     masks, _ = _depth_bands(depth, k=4)
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
     feats = _cluster_feats(rgb, depth, masks)
     avg_sim = float(np.mean([np.dot(f, f) for f in feats])) if feats else 0.0
 
+    # --- Output dict ---
     return {
         "rules": [],
         "repeats": [int(rx), int(ry)],
@@ -178,3 +172,4 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
         "cluster_feats": [f.astype(np.float32).tolist() for f in feats],
         "avg_sim": avg_sim,
     }
+
