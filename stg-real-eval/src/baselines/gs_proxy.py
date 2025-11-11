@@ -97,6 +97,7 @@ def _dominant_repeats(masks: List[np.ndarray]) -> Tuple[int, int]:
     lab = np.zeros((h, w), dtype=np.int32)
     for i, m in enumerate(masks):
         lab[m] = i + 1
+
     tx = (lab[:, 1:] != lab[:, :-1]).astype(np.float32)  # x-edges
     ty = (lab[1:, :] != lab[:-1, :]).astype(np.float32)  # y-edges
     sx = tx.sum(axis=0)  # length w-1
@@ -110,6 +111,9 @@ def _dominant_repeats(masks: List[np.ndarray]) -> Tuple[int, int]:
         if spec.size:
             spec[0] = 0  # drop DC
         return int(np.argmax(spec)) if spec.size else 0
+
+    # ✅ return the pair of peaks
+    return _fft_peak(sx), _fft_peak(sy)
 
 
 def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarray]) -> List[np.ndarray]:
