@@ -156,7 +156,7 @@ def run_scene(cfg, scene, results_dir: Path):
 
     if model_type in ("raster", "raster_crf"):
         pass
-    elif model_type in ("gs_proxy", "gs_proxy_v2"):
+    elif model_type in ("gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
         prev = os.environ.get("STG_FEATURES")
         os.environ["STG_FEATURES"] = "midas"
         try:
@@ -187,7 +187,7 @@ def run_scene(cfg, scene, results_dir: Path):
             ade, fde = np.nan, np.nan
 
     preds = []
-    gs_v2_metrics = None
+    external_metrics = None
     t0 = time.time()
     if model_type == "slot" and infer_slot_baseline is not None:
         print("🧩  Slot-Attention baseline branch entered; running unsupervised part inference...")
@@ -218,13 +218,13 @@ def run_scene(cfg, scene, results_dir: Path):
             out_json.parent.mkdir(parents=True, exist_ok=True)
             gs_proxy_v2.main_from_paths([str(p) for p in frame_paths], str(depth_cache_dir), str(out_json))
             proxy_out = json.loads(out_json.read_text())
-            gs_v2_metrics = (
+            external_metrics = (
                 proxy_out.get("delta_similarity", np.nan),
                 proxy_out.get("replay_iou", np.nan),
             )
         except Exception as exc:
             print(f"⚠️  gs_proxy_v2 failed: {exc}")
-            gs_v2_metrics = (np.nan, np.nan)
+            external_metrics = (np.nan, np.nan)
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
         for pil_img, fr in zip(pil_images, frames):
@@ -252,6 +252,23 @@ def run_scene(cfg, scene, results_dir: Path):
                 print(f"⚠️ Raster baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
+    elif model_type == "geo_depth_bands":
+        print("🧭  Geometry (Depth-Bands) baseline active – computing ΔSim & Replay IoU")
+        from stg_real_eval.baselines import geo_depth_bands
+
+        depth_cache_dir = Path("cache") / "block_b" / cfg["dataset"] / scene.scene_id / "midas"
+        out_json = Path(cfg["outputs"]["results_dir"]) / scene.scene_id / "geo_depth_bands_summary.json"
+        try:
+            out_json.parent.mkdir(parents=True, exist_ok=True)
+            geo_depth_bands.main_from_paths([str(p) for p in frame_paths], str(depth_cache_dir), str(out_json))
+            proxy_out = json.loads(out_json.read_text())
+            external_metrics = (
+                proxy_out.get("delta_similarity", np.nan),
+                proxy_out.get("replay_iou", np.nan),
+            )
+        except Exception as exc:
+            print(f"⚠️  geo_depth_bands failed: {exc}")
+            external_metrics = (np.nan, np.nan)
     else:
         for pil_img, fr in zip(pil_images, frames):
             try:
@@ -318,7 +335,7 @@ def run_scene(cfg, scene, results_dir: Path):
     mask_seq = []
     if mask_seq_slot is not None:
         mask_seq = mask_seq_slot
-    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy"):
+    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
@@ -392,7 +409,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2"):
+    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
@@ -453,8 +470,8 @@ def run_scene(cfg, scene, results_dir: Path):
         if frame_sims:
             dsim = float(np.nanmean(frame_sims))
 
-    if gs_v2_metrics is not None:
-        dsim, rep_iou = gs_v2_metrics
+    if external_metrics is not None:
+        dsim, rep_iou = external_metrics
 
     edit_iou = np.nan
 
