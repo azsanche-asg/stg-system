@@ -44,7 +44,7 @@ from stg_real_eval.data import CMPFacade, CityscapesSeq, NuScenesMini
 from stg_real_eval.metrics.efficiency import footprint
 from stg_real_eval.metrics.temporal import ade_fde_from_flow, replay_iou
 from stg_real_eval.metrics.structural import delta_similarity, purity, facade_grid_score
-from stg_real_eval.scripts.extract_features import extract_scene
+from stg_real_eval.scripts.extract_features import extract_scene, compute_midas_batch
 
 try:
     from stg_real_eval.baselines.crf_utils import dense_crf_refine
@@ -186,15 +186,27 @@ def run_scene(cfg, scene, results_dir: Path):
     elif model_type == "gs_proxy" and infer_gs_proxy is not None:
         print("🪩  3DGS proxy baseline active – inferring geometry from MiDaS depth")
         cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+        depth_cache = {}
+        missing = []
         for fr in frames:
             stem = Path(fr.image_path).stem
             depth_file = cache_root / f"{stem}_midas.npy"
-            if not depth_file.exists():
-                print(f"⚠️ No MiDaS cache found for {fr.image_path}")
+            if depth_file.exists():
+                depth = np.load(depth_file)
+                depth_cache[str(fr.image_path)] = depth[0] if depth.ndim > 2 else depth
+            else:
+                missing.append(str(fr.image_path))
+        if missing:
+            print(f"[info] Computing MiDaS on-the-fly for {len(missing)} frames")
+            onfly = compute_midas_batch(missing)
+            for path, depth in zip(missing, onfly):
+                if depth is not None:
+                    depth_cache[path] = depth
+        for fr in frames:
+            depth = depth_cache.get(str(fr.image_path))
+            if depth is None:
+                print(f"⚠️ Skipping frame (no depth) {fr.image_path}")
                 continue
-            depth = np.load(depth_file)
-            if depth.ndim > 2:
-                depth = depth[0]
             try:
                 pred = infer_gs_proxy(Image.open(fr.image_path).convert("RGB"), depth)
             except Exception as exc:
@@ -367,8 +379,10 @@ def run_scene(cfg, scene, results_dir: Path):
             if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
         ]
 
-    if feat_matrix:
-        feat_matrix = np.stack(feat_matrix)
+    if isinstance(feat_matrix, list):
+        feat_matrix = np.stack(feat_matrix) if feat_matrix else None
+
+    if feat_matrix is not None and len(feat_matrix) > 0:
         pred_labels = np.arange(len(feat_matrix)) % 3
         gt_labels = pred_labels.copy()
         dummy_mask = np.ones((64, 64))
