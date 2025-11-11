@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
-from PIL import Image
+#from PIL import Image
 from sklearn.cluster import KMeans
 
 
