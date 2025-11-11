@@ -67,9 +67,9 @@ try:
 except Exception:  # pragma: no cover
     infer_dino_cluster = None
 try:
-from stg_real_eval.baselines.gs_proxy import run_gs_proxy_for_frame
+    from stg_real_eval.baselines.gs_proxy import run_gs_proxy_for_frame as infer_gs_proxy
 except Exception:  # pragma: no cover
-    run_gs_proxy_for_frame = None
+    infer_gs_proxy = None
 try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
@@ -197,12 +197,12 @@ def run_scene(cfg, scene, results_dir: Path):
                 print(f"⚠️  Slot baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
-    elif model_type == "gs_proxy" and run_gs_proxy_for_frame is not None:
+    elif model_type == "gs_proxy" and infer_gs_proxy is not None:
         print("🪩  3DGS proxy baseline active – deriving geometry from MiDaS depth")
         depth_cache = Path("cache") / "gs_proxy_depth" / scene.dataset / scene.scene_id
         for fr in frames:
             try:
-                pred = run_gs_proxy_for_frame(Path(fr.image_path), depth_cache)
+                pred = infer_gs_proxy(Path(fr.image_path), depth_cache)
                 preds.append(pred)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
