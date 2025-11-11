@@ -5,6 +5,22 @@ from PIL import Image
 from sklearn.cluster import KMeans
 
 
+def cluster_feature_vectors(tokens, labels, num_clusters):
+    feats = []
+    for i in range(num_clusters):
+        mask = labels == i
+        if mask.sum() == 0:
+            feats.append(np.zeros(tokens.shape[1], dtype=np.float32))
+        else:
+            feats.append(tokens[mask].mean(axis=0))
+    return np.stack(feats, axis=0)
+
+
+def cosine_similarity_matrix(X):
+    Xn = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-6)
+    return Xn @ Xn.T
+
+
 class DINOClusterWrapper(torch.nn.Module):
     """DINO v2 feature clustering baseline."""
 
@@ -43,6 +59,10 @@ class DINOClusterWrapper(torch.nn.Module):
         h_bins = np.unique(np.digitize(ys, np.linspace(0, H, self.num_clusters)))
         floors, repeats = len(h_bins), len(v_bins)
 
+        feats = cluster_feature_vectors(tokens, labels.flatten(), self.num_clusters)
+        sim = cosine_similarity_matrix(feats)
+        mean_sim = float(np.tril(sim, -1).mean()) if sim.size else float("nan")
+
         return {
             "rules": [f"Split_y_{floors}", f"Repeat_x_{repeats}"],
             "repeats": [int(floors), int(repeats)],
@@ -51,6 +71,8 @@ class DINOClusterWrapper(torch.nn.Module):
             "motion": [],
             "proxy_mask": union.tolist(),
             "slot_masks": [m.tolist() for m in masks],
+            "cluster_feats": feats.tolist(),
+            "avg_sim": mean_sim,
         }
 
 

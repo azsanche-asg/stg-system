@@ -198,6 +198,8 @@ def run_scene(cfg, scene, results_dir: Path):
         preds = refined_preds
 
     mask_seq_slot = None
+    dino_masks_seq = None
+    dino_feats_seq = None
     if model_type == "slot" and match_slots_across_frames is not None:
         slot_masks_seq = []
         slot_embs_seq = []
@@ -214,9 +216,27 @@ def run_scene(cfg, scene, results_dir: Path):
             matched = match_slots_across_frames(slot_masks_seq, slot_embs_seq, alpha=0.5)
             if matched:
                 mask_seq_slot = [np.array(m, dtype=bool) for m in matched]
+    elif model_type == "dino_cluster" and match_slots_across_frames is not None:
+        slot_masks_seq = []
+        feats_seq = []
+        valid = True
+        for pred in preds:
+            sms = pred.get("slot_masks")
+            fts = pred.get("cluster_feats")
+            if sms is None or fts is None:
+                valid = False
+                break
+            slot_masks_seq.append([np.array(m, dtype=bool) for m in sms])
+            feats_seq.append([np.array(f, dtype=np.float32) for f in fts])
+        if valid and slot_masks_seq:
+            matched = match_slots_across_frames(slot_masks_seq, feats_seq, alpha=0.5)
+            if matched:
+                dino_masks_seq = [np.array(m, dtype=bool) for m in matched]
 
     mask_seq = []
-    if mask_seq_slot is not None:
+    if dino_masks_seq is not None:
+        mask_seq = dino_masks_seq
+    elif mask_seq_slot is not None:
         mask_seq = mask_seq_slot
     elif model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
         for pred in preds:
@@ -230,7 +250,10 @@ def run_scene(cfg, scene, results_dir: Path):
             if f_midas.exists():
                 depth = np.load(f_midas)
                 mask_seq.append(depth[0] > np.median(depth[0]))
-    rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+    if dino_masks_seq is not None:
+        rep_iou = replay_iou(dino_masks_seq) if len(dino_masks_seq) > 1 else np.nan
+    else:
+        rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
     if scene.dataset == "cmp-facade":
         rep_iou = np.nan
 
@@ -265,6 +288,11 @@ def run_scene(cfg, scene, results_dir: Path):
         fgrid = facade_grid_score(dummy_mask)
     else:
         dsim = pur = fgrid = np.nan
+
+    if model_type == "dino_cluster":
+        frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
+        if frame_sims:
+            dsim = float(np.nanmean(frame_sims))
 
     edit_iou = np.nan
 
