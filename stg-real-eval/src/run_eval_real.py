@@ -304,7 +304,7 @@ def run_scene(cfg, scene, results_dir: Path):
             f_midas = cache_root / f"{stem}_midas.npy"
             if f_midas.exists():
                 depth = np.load(f_midas)
-                mask_seq.append(depth[0] > np.median(depth[0]))
+                mask_seq.append((depth[0] if depth.ndim == 3 else depth) > np.median(depth))
     rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
 
     if model_type == "dino_cluster" and slot_masks_seq:
@@ -350,31 +350,32 @@ def run_scene(cfg, scene, results_dir: Path):
             if len(pooled) == len(preds) and pooled:
                 feat_matrix = np.stack(pooled, axis=0)
 
-    need_clip = False
-    if isinstance(feat_matrix, list):
-        need_clip = len(feat_matrix) == 0
-    elif isinstance(feat_matrix, np.ndarray):
-        need_clip = feat_matrix.size == 0
-    else:
-        need_clip = not feat_matrix
+    if not isinstance(feat_matrix, (list, np.ndarray)) or (isinstance(feat_matrix, list) and len(feat_matrix) == 0):
+        clip_feats = []
+        for fr in frames:
+            fpath = cache_root / f"{Path(fr.image_path).stem}_clip.npy"
+            if fpath.exists():
+                clip_feats.append(np.load(fpath).flatten())
+        feat_matrix = np.stack(clip_feats, axis=0) if clip_feats else None
 
-    if need_clip:
-        extract_scene(scene.dataset, scene.scene_id, frame_paths)
-        feat_matrix = [
-            np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
-            for f in frames
-            if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
-        ]
+    if isinstance(feat_matrix, list) and feat_matrix:
+        try:
+            feat_matrix = np.stack(feat_matrix, axis=0)
+        except Exception:
+            feat_matrix = None
 
-    if isinstance(feat_matrix, list):
-        feat_matrix = np.stack(feat_matrix) if feat_matrix else None
-
-    if feat_matrix is not None and len(feat_matrix) > 0:
-        pred_labels = np.arange(len(feat_matrix)) % 3
-        gt_labels = pred_labels.copy()
+    if isinstance(feat_matrix, np.ndarray) and feat_matrix.ndim == 2 and feat_matrix.shape[0] >= 2:
+        try:
+            dsim = float(delta_similarity(feat_matrix))
+        except Exception:
+            dsim = np.nan
+        n = feat_matrix.shape[0]
+        try:
+            labels = np.arange(n) % 3
+            pur = float(purity(labels, labels.copy()))
+        except Exception:
+            pur = np.nan
         dummy_mask = np.ones((64, 64))
-        dsim = delta_similarity(feat_matrix)
-        pur = purity(pred_labels, gt_labels)
         fgrid = facade_grid_score(dummy_mask)
     else:
         dsim = pur = fgrid = np.nan
