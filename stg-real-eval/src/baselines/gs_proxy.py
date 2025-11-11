@@ -103,16 +103,13 @@ def _dominant_repeats(masks: List[np.ndarray]) -> Tuple[int, int]:
     sy = ty.sum(axis=1)  # length h-1
 
     def _fft_peak(sig: np.ndarray) -> int:
-        sig = sig - sig.mean()
-        if np.allclose(sig, 0):
+        sig = sig - np.nan_to_num(sig.mean(), nan=0.0)
+        if not np.any(np.isfinite(sig)) or np.allclose(sig, 0):
             return 0
         spec = np.abs(np.fft.rfft(sig))
         if spec.size:
-            spec[0] = 0
-        peak = int(np.argmax(spec)) if spec.size else 0
-        return max(0, peak)
-
-    return _fft_peak(sx), _fft_peak(sy)
+            spec[0] = 0  # drop DC
+        return int(np.argmax(spec)) if spec.size else 0
 
 
 def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarray]) -> List[np.ndarray]:
@@ -152,8 +149,11 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     #depth = _load_depth_from_cache(image_path, depth_cache_dir)
     depth = _load_depth_from_cache(image_path, depth_cache_dir)
     # Ensure single-channel depth (sometimes MiDaS saves 3-channel pseudo-RGB depth)
-    if depth.ndim == 3:
-        depth = depth[..., 0]
+    #if depth.ndim == 3:
+    #    depth = depth[..., 0]
+    depth = np.squeeze(depth)  # <-- add this
+    if depth.ndim != 2:
+        depth = depth[..., 0]  # final fallback
     masks, _ = _depth_bands(depth, k=4)
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
