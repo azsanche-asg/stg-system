@@ -59,6 +59,10 @@ try:
 except Exception:  # pragma: no cover
     raster_with_crf = None
 try:
+    from stg_real_eval.baselines.dino_cluster_proxy import infer_dino_cluster
+except Exception:  # pragma: no cover
+    infer_dino_cluster = None
+try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
@@ -107,7 +111,7 @@ def run_scene(cfg, scene, results_dir: Path):
         model_type = cfg.get("model", "stsg")
     print(f"⚙️  Model type selected: {model_type}")
 
-    if model_type not in ("raster", "raster_crf"):
+    if model_type not in ("raster", "raster_crf", "dino_cluster"):
         extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     pil_images = []
@@ -136,6 +140,15 @@ def run_scene(cfg, scene, results_dir: Path):
                 pred = infer_slot_baseline(pil_img)
             except Exception as exc:
                 print(f"⚠️  Slot baseline failed for {fr.image_path}: {exc}")
+                pred = {"rules": [], "repeats": [0, 0], "depth": 0}
+            preds.append(pred)
+    elif model_type == "dino_cluster" and infer_dino_cluster is not None:
+        print("🧩  DINO v2 feature-clustering baseline active…")
+        for pil_img, fr in zip(pil_images, frames):
+            try:
+                pred = infer_dino_cluster(pil_img)
+            except Exception as exc:
+                print(f"⚠️ DINO cluster baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
     elif model_type == "raster_crf" and raster_with_crf is not None:
@@ -205,7 +218,7 @@ def run_scene(cfg, scene, results_dir: Path):
     mask_seq = []
     if mask_seq_slot is not None:
         mask_seq = mask_seq_slot
-    elif model_type in ("raster", "slot", "raster_crf"):
+    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
@@ -222,7 +235,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot", "raster_crf"):
+    if model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
