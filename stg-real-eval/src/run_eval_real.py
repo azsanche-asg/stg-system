@@ -63,6 +63,10 @@ try:
 except Exception:  # pragma: no cover
     infer_dino_cluster = None
 try:
+    from stg_real_eval.baselines.gs_proxy import infer_gs_proxy
+except Exception:  # pragma: no cover
+    infer_gs_proxy = None
+try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
@@ -167,6 +171,25 @@ def run_scene(cfg, scene, results_dir: Path):
                 print(f"⚠️  Slot baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
+    elif model_type == "gs_proxy" and infer_gs_proxy is not None:
+        print("🪩  3DGS proxy baseline active – inferring geometry from MiDaS depth")
+        cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+        for pil_img, fr in zip(pil_images, frames):
+            stem = Path(fr.image_path).stem
+            depth_file = cache_root / f"{stem}_midas.npy"
+            if not depth_file.exists():
+                print(f"⚠️ No MiDaS cache found for {fr.image_path}")
+                preds.append({"rules": [], "repeats": [0, 0], "depth": 0, "proxy_mask": None})
+                continue
+            depth = np.load(depth_file)
+            if depth.ndim > 2:
+                depth = depth[0]
+            try:
+                pred = infer_gs_proxy(pil_img, depth)
+            except Exception as exc:
+                print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
+                pred = {"rules": [], "repeats": [0, 0], "depth": 0, "proxy_mask": None}
+            preds.append(pred)
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
         for pil_img, fr in zip(pil_images, frames):
@@ -260,7 +283,7 @@ def run_scene(cfg, scene, results_dir: Path):
     mask_seq = []
     if mask_seq_slot is not None:
         mask_seq = mask_seq_slot
-    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
+    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
@@ -291,7 +314,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
+    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
@@ -322,7 +345,7 @@ def run_scene(cfg, scene, results_dir: Path):
     else:
         dsim = pur = fgrid = np.nan
 
-    if model_type == "dino_cluster":
+    if model_type in ("dino_cluster", "gs_proxy"):
         frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
         if frame_sims:
             dsim = float(np.nanmean(frame_sims))
