@@ -75,7 +75,7 @@ try:
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
 try:
-from stg_real_eval.metrics.temporal_slots import match_slots_across_frames
+    from stg_real_eval.metrics.temporal_slots import match_slots_across_frames
 except Exception:  # pragma: no cover
     match_slots_across_frames = None
 
