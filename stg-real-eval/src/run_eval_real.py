@@ -63,9 +63,9 @@ try:
 except Exception:  # pragma: no cover
     infer_dino_cluster = None
 try:
-    from stg_real_eval.baselines.gs_proxy import infer_gs_proxy
+    from stg_real_eval.baselines.gs_proxy import run_gs_proxy_for_frame
 except Exception:  # pragma: no cover
-    infer_gs_proxy = None
+    run_gs_proxy_for_frame = None
 try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
@@ -183,23 +183,15 @@ def run_scene(cfg, scene, results_dir: Path):
                 print(f"⚠️  Slot baseline failed for {fr.image_path}: {exc}")
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
-    elif model_type == "gs_proxy" and infer_gs_proxy is not None:
+    elif model_type == "gs_proxy" and run_gs_proxy_for_frame is not None:
         print("🪩  3DGS proxy baseline active – deriving geometry from MiDaS depth")
-        cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+        depth_cache = Path("cache") / "gs_proxy_depth" / scene.dataset / scene.scene_id
         for fr in frames:
-            stem = Path(fr.image_path).stem
-            depth_file = cache_root / f"{stem}_midas.npy"
-            if not depth_file.exists():
-                print(f"⚠️ No MiDaS cache found for {fr.image_path}, skipping.")
-                continue
             try:
-                depth = np.load(depth_file)
-                depth = depth[0] if depth.ndim == 3 else depth
-                pred = infer_gs_proxy(Image.open(fr.image_path).convert("RGB"), depth)
+                pred = run_gs_proxy_for_frame(Path(fr.image_path), depth_cache)
                 preds.append(pred)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
-                continue
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
         for pil_img, fr in zip(pil_images, frames):

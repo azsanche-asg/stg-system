@@ -24,3 +24,13 @@ Copy code
 
 ### Snapshot
 Frozen as **v1_static_baseline** (Block A complete).
+### Light 3DGS Proxy (Block B)
+This NumPy-only baseline uses MiDaS depth (cache-first, compute-on-miss) to fit simple planes,
+estimate repeats/splits from depth gradients, and emit proxy masks/features. Run it with:
+
+```bash
+BASELINE=gs_proxy python stg-real-eval/src/run_eval_real.py \
+  --config stg-real-eval/configs/block_b_cityscapes.yaml
+```
+
+Depth caches are stored under `cache/gs_proxy_depth/<dataset>/<scene>/` as `.npz` files.
