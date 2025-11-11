@@ -149,7 +149,11 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     with Image.open(image_path) as im:
         rgb = np.array(im.convert("RGB"))
 
+    #depth = _load_depth_from_cache(image_path, depth_cache_dir)
     depth = _load_depth_from_cache(image_path, depth_cache_dir)
+    # Ensure single-channel depth (sometimes MiDaS saves 3-channel pseudo-RGB depth)
+    if depth.ndim == 3:
+        depth = depth[..., 0]
     masks, _ = _depth_bands(depth, k=4)
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
