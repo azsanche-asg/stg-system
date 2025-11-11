@@ -64,6 +64,13 @@ def _binary_mask(depth: np.ndarray) -> np.ndarray:
 def _iou(a: np.ndarray, b: np.ndarray) -> float:
     a = a.astype(bool)
     b = b.astype(bool)
+    if a.shape != b.shape:
+        H = min(a.shape[0], b.shape[0])
+        W = min(a.shape[1], b.shape[1])
+        a = a[:: max(1, a.shape[0] // H), :: max(1, a.shape[1] // W)]
+        b = b[:: max(1, b.shape[0] // H), :: max(1, b.shape[1] // W)]
+        a = a[:H, :W]
+        b = b[:H, :W]
     inter = np.logical_and(a, b).sum()
     uni = np.logical_or(a, b).sum()
     return inter / uni if uni > 0 else np.nan
