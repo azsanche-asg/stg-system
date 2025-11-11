@@ -140,7 +140,19 @@ def run_scene(cfg, scene, results_dir: Path):
         model_type = cfg.get("model", "stsg")
     print(f"⚙️  Model type selected: {model_type}")
 
-    if model_type not in ("raster", "raster_crf", "dino_cluster", "gs_proxy"):
+    if model_type in ("raster", "raster_crf"):
+        pass
+    elif model_type == "gs_proxy":
+        prev = os.environ.get("STG_FEATURES")
+        os.environ["STG_FEATURES"] = "midas"
+        try:
+            extract_scene(scene.dataset, scene.scene_id, frame_paths)
+        finally:
+            if prev is not None:
+                os.environ["STG_FEATURES"] = prev
+            else:
+                os.environ.pop("STG_FEATURES", None)
+    else:
         extract_scene(scene.dataset, scene.scene_id, frame_paths)
 
     pil_images = []
@@ -174,21 +186,20 @@ def run_scene(cfg, scene, results_dir: Path):
     elif model_type == "gs_proxy" and infer_gs_proxy is not None:
         print("🪩  3DGS proxy baseline active – inferring geometry from MiDaS depth")
         cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
-        for pil_img, fr in zip(pil_images, frames):
+        for fr in frames:
             stem = Path(fr.image_path).stem
             depth_file = cache_root / f"{stem}_midas.npy"
             if not depth_file.exists():
                 print(f"⚠️ No MiDaS cache found for {fr.image_path}")
-                preds.append({"rules": [], "repeats": [0, 0], "depth": 0, "proxy_mask": None})
                 continue
             depth = np.load(depth_file)
             if depth.ndim > 2:
                 depth = depth[0]
             try:
-                pred = infer_gs_proxy(pil_img, depth)
+                pred = infer_gs_proxy(Image.open(fr.image_path).convert("RGB"), depth)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
-                pred = {"rules": [], "repeats": [0, 0], "depth": 0, "proxy_mask": None}
+                continue
             preds.append(pred)
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
@@ -326,13 +337,35 @@ def run_scene(cfg, scene, results_dir: Path):
             fpath = cache_root / f"{stem}_clip.npy"
             if fpath.exists():
                 feat_matrix.append(np.load(fpath).flatten())
-        if not feat_matrix:
-            extract_scene(scene.dataset, scene.scene_id, frame_paths)
-            feat_matrix = [
-                np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
-                for f in frames
-                if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
-            ]
+
+    if not feat_matrix:
+        if model_type in ("dino_cluster", "gs_proxy"):
+            pooled = []
+            for pred in preds:
+                cf = pred.get("cluster_feats")
+                if cf is None:
+                    pooled = []
+                    break
+                arr = np.asarray(cf, dtype=np.float32)
+                pooled.append(arr.mean(axis=0))
+            if len(pooled) == len(preds) and pooled:
+                feat_matrix = np.stack(pooled, axis=0)
+
+    need_clip = False
+    if isinstance(feat_matrix, list):
+        need_clip = len(feat_matrix) == 0
+    elif isinstance(feat_matrix, np.ndarray):
+        need_clip = feat_matrix.size == 0
+    else:
+        need_clip = not feat_matrix
+
+    if need_clip:
+        extract_scene(scene.dataset, scene.scene_id, frame_paths)
+        feat_matrix = [
+            np.load(cache_root / f"{Path(f.image_path).stem}_clip.npy").flatten()
+            for f in frames
+            if (cache_root / f"{Path(f.image_path).stem}_clip.npy").exists()
+        ]
 
     if feat_matrix:
         feat_matrix = np.stack(feat_matrix)
