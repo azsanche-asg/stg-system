@@ -169,4 +169,4 @@ def main_from_paths(frame_paths: List[str], depth_cache_dir: str, out_json: str)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, indent=2))
     print(json.dumps(out, indent=2))
-*** End Scripts
+
