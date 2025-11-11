@@ -156,7 +156,7 @@ def run_scene(cfg, scene, results_dir: Path):
 
     if model_type in ("raster", "raster_crf"):
         pass
-    elif model_type == "gs_proxy":
+    elif model_type in ("gs_proxy", "gs_proxy_v2"):
         prev = os.environ.get("STG_FEATURES")
         os.environ["STG_FEATURES"] = "midas"
         try:
@@ -187,6 +187,7 @@ def run_scene(cfg, scene, results_dir: Path):
             ade, fde = np.nan, np.nan
 
     preds = []
+    gs_v2_metrics = None
     t0 = time.time()
     if model_type == "slot" and infer_slot_baseline is not None:
         print("🧩  Slot-Attention baseline branch entered; running unsupervised part inference...")
@@ -206,6 +207,23 @@ def run_scene(cfg, scene, results_dir: Path):
                 preds.append(pred)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
+    elif model_type == "gs_proxy_v2":
+        print("🧭  Geometry Proxy v2 baseline active – computing temporal ΔSim & Replay IoU")
+        from stg_real_eval.baselines import gs_proxy_v2
+
+        cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+        out_json = cache_root / "gs_proxy_v2_summary.json"
+        try:
+            frames_dir = Path(frame_paths[0]).parent if frame_paths else Path(cfg["paths"].get("root", "."))
+            gs_proxy_v2.main(frames_dir, out_json)
+            proxy_out = json.loads(out_json.read_text())
+            gs_v2_metrics = (
+                proxy_out.get("delta_similarity", np.nan),
+                proxy_out.get("replay_iou", np.nan),
+            )
+        except Exception as exc:
+            print(f"⚠️  gs_proxy_v2 failed: {exc}")
+            gs_v2_metrics = (np.nan, np.nan)
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
         for pil_img, fr in zip(pil_images, frames):
@@ -373,7 +391,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy"):
+    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
@@ -433,6 +451,9 @@ def run_scene(cfg, scene, results_dir: Path):
         frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
         if frame_sims:
             dsim = float(np.nanmean(frame_sims))
+
+    if gs_v2_metrics is not None:
+        dsim, rep_iou = gs_v2_metrics
 
     edit_iou = np.nan
 
