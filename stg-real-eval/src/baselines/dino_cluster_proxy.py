@@ -17,22 +17,32 @@ class DINOClusterWrapper(torch.nn.Module):
 
     @torch.no_grad()
     def infer_regions(self, pil_img: Image.Image):
+        """Cluster DINO tokens into region masks without assuming square grids."""
+        import math
+
         img = torchvision.transforms.functional.resize(pil_img, (224, 224))
         x = torchvision.transforms.functional.to_tensor(img).unsqueeze(0).to(self.device)
+
         feats = self.model.get_intermediate_layers(x, n=1)[0]
         tokens = feats[0, 1:, :].cpu().numpy()
-        H = W = int(np.sqrt(tokens.shape[0]))
+        N, D = tokens.shape
+
+        H = int(math.floor(math.sqrt(N)))
+        W = int(math.ceil(N / H))
+        if H * W != N:
+            pad = np.zeros((H * W - N, D), dtype=tokens.dtype)
+            tokens = np.concatenate([tokens, pad], axis=0)
+
         km = KMeans(self.num_clusters, n_init=3, random_state=0).fit(tokens)
         labels = km.labels_.reshape(H, W)
         masks = [(labels == i).astype(np.uint8) for i in range(self.num_clusters)]
         union = (labels >= 0).astype(np.uint8)
+
         ys, xs = np.where(union > 0)
-        if xs.size == 0:
-            floors = repeats = 1
-        else:
-            v_bins = np.unique(np.digitize(xs, np.linspace(0, W, self.num_clusters)))
-            h_bins = np.unique(np.digitize(ys, np.linspace(0, H, self.num_clusters)))
-            floors, repeats = len(h_bins), len(v_bins)
+        v_bins = np.unique(np.digitize(xs, np.linspace(0, W, self.num_clusters)))
+        h_bins = np.unique(np.digitize(ys, np.linspace(0, H, self.num_clusters)))
+        floors, repeats = len(h_bins), len(v_bins)
+
         return {
             "rules": [f"Split_y_{floors}", f"Repeat_x_{repeats}"],
             "repeats": [int(floors), int(repeats)],
