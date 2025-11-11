@@ -139,26 +139,6 @@ def extract_scene(dataset_name: str, scene_id: str, frame_paths, which=("clip", 
     print(f"✅ Cached {len(frame_paths)} frames for {dataset_name}/{scene_id} using features: {which}")
 
 
-def compute_midas_batch(frame_paths):
-    """Compute MiDaS depth maps for a batch of image paths."""
-    device = _device()
-    model = _load_midas().to(device)
-    outputs = []
-    for path in frame_paths:
-        try:
-            img = Image.open(path).convert("RGB")
-            tensor = _to_tensor(img).to(device)
-            with torch.no_grad():
-                depth = model(tensor).detach().cpu().numpy()
-            if depth.ndim == 4:
-                depth = depth[0]
-            outputs.append(depth)
-        except Exception as exc:  # pragma: no cover
-            print(f"[WARN] compute_midas_batch failed for {path}: {exc}")
-            outputs.append(None)
-    return outputs
-
-
 if __name__ == "__main__":
     # Tiny CLI usage documented in README; real invocation handled by run_eval_real.py
     import argparse

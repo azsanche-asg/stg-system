@@ -44,7 +44,7 @@ from stg_real_eval.data import CMPFacade, CityscapesSeq, NuScenesMini
 from stg_real_eval.metrics.efficiency import footprint
 from stg_real_eval.metrics.temporal import ade_fde_from_flow, replay_iou
 from stg_real_eval.metrics.structural import delta_similarity, purity, facade_grid_score
-from stg_real_eval.scripts.extract_features import extract_scene, compute_midas_batch
+from stg_real_eval.scripts.extract_features import extract_scene
 
 try:
     from stg_real_eval.baselines.crf_utils import dense_crf_refine
@@ -184,35 +184,22 @@ def run_scene(cfg, scene, results_dir: Path):
                 pred = {"rules": [], "repeats": [0, 0], "depth": 0}
             preds.append(pred)
     elif model_type == "gs_proxy" and infer_gs_proxy is not None:
-        print("🪩  3DGS proxy baseline active – inferring geometry from MiDaS depth")
+        print("🪩  3DGS proxy baseline active – deriving geometry from MiDaS depth")
         cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
-        depth_cache = {}
-        missing = []
         for fr in frames:
             stem = Path(fr.image_path).stem
             depth_file = cache_root / f"{stem}_midas.npy"
-            if depth_file.exists():
-                depth = np.load(depth_file)
-                depth_cache[str(fr.image_path)] = depth[0] if depth.ndim > 2 else depth
-            else:
-                missing.append(str(fr.image_path))
-        if missing:
-            print(f"[info] Computing MiDaS on-the-fly for {len(missing)} frames")
-            onfly = compute_midas_batch(missing)
-            for path, depth in zip(missing, onfly):
-                if depth is not None:
-                    depth_cache[path] = depth
-        for fr in frames:
-            depth = depth_cache.get(str(fr.image_path))
-            if depth is None:
-                print(f"⚠️ Skipping frame (no depth) {fr.image_path}")
+            if not depth_file.exists():
+                print(f"⚠️ No MiDaS cache found for {fr.image_path}, skipping.")
                 continue
             try:
+                depth = np.load(depth_file)
+                depth = depth[0] if depth.ndim == 3 else depth
                 pred = infer_gs_proxy(Image.open(fr.image_path).convert("RGB"), depth)
+                preds.append(pred)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
                 continue
-            preds.append(pred)
     elif model_type == "dino_cluster" and infer_dino_cluster is not None:
         print("🧩  DINO v2 feature-clustering baseline active…")
         for pil_img, fr in zip(pil_images, frames):
