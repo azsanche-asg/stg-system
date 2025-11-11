@@ -44,6 +44,10 @@ from stg_real_eval.data import CMPFacade, CityscapesSeq, NuScenesMini
 from stg_real_eval.metrics.efficiency import footprint
 from stg_real_eval.metrics.temporal import ade_fde_from_flow, replay_iou
 from stg_real_eval.metrics.structural import delta_similarity, purity, facade_grid_score
+try:
+    from stg_real_eval.metrics.structural import delta_similarity_from_rules as _delta_sim_rules
+except Exception:  # pragma: no cover
+    _delta_sim_rules = None
 from stg_real_eval.scripts.extract_features import extract_scene
 
 try:
@@ -63,7 +67,7 @@ try:
 except Exception:  # pragma: no cover
     infer_dino_cluster = None
 try:
-    from stg_real_eval.baselines.gs_proxy import run_gs_proxy_for_frame
+from stg_real_eval.baselines.gs_proxy import run_gs_proxy_for_frame
 except Exception:  # pragma: no cover
     run_gs_proxy_for_frame = None
 try:
@@ -71,7 +75,7 @@ try:
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
 try:
-    from stg_real_eval.metrics.temporal_slots import match_slots_across_frames
+from stg_real_eval.metrics.temporal_slots import match_slots_across_frames
 except Exception:  # pragma: no cover
     match_slots_across_frames = None
 
@@ -102,6 +106,16 @@ def get_scenes(cfg) -> List[Dict[str, Any]]:
         loader = CMPFacade(p["root"], max_images=cfg["eval"].get("max_images", 10))
         return loader.list_scenes()
     raise ValueError(f"Unknown dataset {ds}")
+
+
+def _binary_iou(a: np.ndarray, b: np.ndarray) -> float:
+    a = a.astype(bool)
+    b = b.astype(bool)
+    inter = np.logical_and(a, b).sum()
+    uni = np.logical_or(a, b).sum()
+    if uni == 0:
+        return float("nan")
+    return float(inter) / float(uni)
 
 
 def run_scene(cfg, scene, results_dir: Path):
@@ -298,6 +312,49 @@ def run_scene(cfg, scene, results_dir: Path):
                 depth = np.load(f_midas)
                 mask_seq.append((depth[0] if depth.ndim == 3 else depth) > np.median(depth))
     rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+
+    if model_type == "gs_proxy":
+        frame_sims = []
+        replay_ious = []
+        prev = None
+        for cur in preds:
+            if prev is not None:
+                sim = np.nan
+                if _delta_sim_rules is not None:
+                    try:
+                        sim = float(_delta_sim_rules(prev.get("rules", []), cur.get("rules", [])))
+                    except Exception:
+                        sim = np.nan
+                if not np.isfinite(sim):
+                    try:
+                        r0 = np.array(prev.get("repeats", []), dtype=float)
+                        r1 = np.array(cur.get("repeats", []), dtype=float)
+                        if r0.size and r1.size and r0.size == r1.size:
+                            denom = np.maximum(1.0, np.abs(r0).sum() + np.abs(r1).sum())
+                            sim = float(1.0 - np.abs(r0 - r1).sum() / denom)
+                        else:
+                            sim = np.nan
+                    except Exception:
+                        sim = np.nan
+                frame_sims.append(sim)
+
+                try:
+                    pm0 = np.array(prev.get("proxy_mask"), dtype=np.uint8)
+                    pm1 = np.array(cur.get("proxy_mask"), dtype=np.uint8)
+                    if pm0.ndim >= 2 and pm1.ndim >= 2:
+                        m0 = (pm0 > 127).astype(bool)
+                        m1 = (pm1 > 127).astype(bool)
+                        iou = _binary_iou(m0, m1)
+                    else:
+                        iou = np.nan
+                except Exception:
+                    iou = np.nan
+                replay_ious.append(iou)
+            prev = cur
+        if frame_sims:
+            dsim = float(np.nanmean(frame_sims))
+        if replay_ious:
+            rep_iou = float(np.nanmean(replay_ious))
 
     if model_type == "dino_cluster" and slot_masks_seq:
         pair_ious = []
