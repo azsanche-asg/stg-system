@@ -10,3 +10,4 @@ torchvision
 git+https://github.com/openai/CLIP.git
 Pillow
 pandas
+git+https://github.com/HHousen/object-discovery-pytorch

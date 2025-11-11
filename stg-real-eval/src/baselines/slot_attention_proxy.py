@@ -3,34 +3,29 @@ import torch
 import torchvision
 from PIL import Image
 
+from .slot_attention_loader import SlotAttentionWrapper
+
 
 def _slot_color_embed(img_rgb, mask):
     m = mask > 0
     if m.sum() == 0:
         return np.zeros(3, dtype=np.float32)
-    col = img_rgb[m].mean(axis=0)
-    return col.astype(np.float32)
+    return img_rgb[m].mean(axis=0).astype(np.float32)
 
 
-class SlotAttentionWrapper(torch.nn.Module):
-    def __init__(self, device="cpu"):
+class SlotAttentionProxy(torch.nn.Module):
+    def __init__(self, checkpoint="slot_attention_clevr", device=None):
         super().__init__()
-        self.model = (
-            torch.hub.load(
-                "facebookresearch/slot_attention_pytorch",
-                "slot_attention_clevr",
-                pretrained=True,
-            )
-            .to(device)
-            .eval()
-        )
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
+        self.wrapper = SlotAttentionWrapper(checkpoint_name=checkpoint, device=device)
 
     @torch.no_grad()
-    def infer_slots(self, pil_img: Image.Image, max_slots: int = 7):
+    def infer(self, pil_img: Image.Image, max_slots: int = 7):
         x = torchvision.transforms.functional.to_tensor(pil_img).unsqueeze(0).to(self.device)
-        out = self.model(x)
-        masks = out["masks"][0].cpu().numpy()
+        outputs = self.wrapper(x)
+        masks = outputs["masks"][0].cpu().numpy()
         K, H, W = masks.shape
         K = min(K, max_slots)
         masks = masks[:K] > 0.5
@@ -57,8 +52,7 @@ class SlotAttentionWrapper(torch.nn.Module):
 
 
 def infer_slot_baseline(pil_img: Image.Image):
-    global _SLOT_MODEL
-    if "_SLOT_MODEL" not in globals():
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        _SLOT_MODEL = SlotAttentionWrapper(device=device)
-    return _SLOT_MODEL.infer_slots(pil_img)
+    global _SLOT_PROXY
+    if "_SLOT_PROXY" not in globals():
+        _SLOT_PROXY = SlotAttentionProxy()
+    return _SLOT_PROXY.infer(pil_img)
