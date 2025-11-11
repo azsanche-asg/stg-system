@@ -211,11 +211,12 @@ def run_scene(cfg, scene, results_dir: Path):
         print("🧭  Geometry Proxy v2 baseline active – computing temporal ΔSim & Replay IoU")
         from stg_real_eval.baselines import gs_proxy_v2
 
-        cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
-        out_json = cache_root / "gs_proxy_v2_summary.json"
+        depth_cache_dir = Path("cache") / "block_b" / cfg["dataset"] / scene.scene_id / "midas"
+        out_json = Path(cfg["outputs"]["results_dir"]) / scene.scene_id / "gs_proxy_v2_summary.json"
+
         try:
-            frames_dir = Path(frame_paths[0]).parent if frame_paths else Path(cfg["paths"].get("root", "."))
-            gs_proxy_v2.main(frames_dir, out_json)
+            out_json.parent.mkdir(parents=True, exist_ok=True)
+            gs_proxy_v2.main_from_paths([str(p) for p in frame_paths], str(depth_cache_dir), str(out_json))
             proxy_out = json.loads(out_json.read_text())
             gs_v2_metrics = (
                 proxy_out.get("delta_similarity", np.nan),
