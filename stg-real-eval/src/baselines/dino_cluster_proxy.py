@@ -69,7 +69,7 @@ class DINOClusterWrapper(torch.nn.Module):
             "depth": 2,
             "persist_ids": [],
             "motion": [],
-            "proxy_mask": union.tolist(),
+            "proxy_mask": None,
             "slot_masks": [m.tolist() for m in masks],
             "cluster_feats": feats.tolist(),
             "avg_sim": mean_sim,

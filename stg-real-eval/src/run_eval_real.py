@@ -101,6 +101,31 @@ def get_scenes(cfg) -> List[Dict[str, Any]]:
 
 
 def run_scene(cfg, scene, results_dir: Path):
+    def _mean_matched_iou(prev_masks, prev_feats, cur_masks, cur_feats, alpha=0.5):
+        def _cos(a, b):
+            na = np.linalg.norm(a) + 1e-6
+            nb = np.linalg.norm(b) + 1e-6
+            return float(np.dot(a, b) / (na * nb))
+
+        def _iou(a, b):
+            inter = np.logical_and(a, b).sum()
+            union = np.logical_or(a, b).sum()
+            return inter / union if union > 0 else 0.0
+
+        used = set()
+        scores = []
+        for i, pm in enumerate(prev_masks):
+            best, bj = -1.0, -1
+            for j, cm in enumerate(cur_masks):
+                if j in used:
+                    continue
+                score = alpha * _iou(pm, cm) + (1 - alpha) * _cos(prev_feats[i], cur_feats[j])
+                if score > best:
+                    best, bj = score, j
+            if bj >= 0:
+                used.add(bj)
+                scores.append(_iou(prev_masks[i], cur_masks[bj]))
+        return float(np.mean(scores)) if scores else float("nan")
     frames = scene.frames
     frame_paths = [str(f.image_path) for f in frames]
 
@@ -199,7 +224,6 @@ def run_scene(cfg, scene, results_dir: Path):
 
     mask_seq_slot = None
     dino_masks_seq = None
-    dino_feats_seq = None
     if model_type == "slot" and match_slots_across_frames is not None:
         slot_masks_seq = []
         slot_embs_seq = []
@@ -234,9 +258,7 @@ def run_scene(cfg, scene, results_dir: Path):
                 dino_masks_seq = [np.array(m, dtype=bool) for m in matched]
 
     mask_seq = []
-    if dino_masks_seq is not None:
-        mask_seq = dino_masks_seq
-    elif mask_seq_slot is not None:
+    if mask_seq_slot is not None:
         mask_seq = mask_seq_slot
     elif model_type in ("raster", "slot", "raster_crf", "dino_cluster"):
         for pred in preds:
@@ -250,10 +272,21 @@ def run_scene(cfg, scene, results_dir: Path):
             if f_midas.exists():
                 depth = np.load(f_midas)
                 mask_seq.append(depth[0] > np.median(depth[0]))
-    if dino_masks_seq is not None:
-        rep_iou = replay_iou(dino_masks_seq) if len(dino_masks_seq) > 1 else np.nan
-    else:
-        rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+    rep_iou = replay_iou(mask_seq) if len(mask_seq) > 1 else np.nan
+
+    if model_type == "dino_cluster" and slot_masks_seq:
+        pair_ious = []
+        for t in range(1, len(slot_masks_seq)):
+            miou = _mean_matched_iou(
+                slot_masks_seq[t - 1],
+                feats_seq[t - 1],
+                slot_masks_seq[t],
+                feats_seq[t],
+                alpha=0.5,
+            )
+            if not np.isnan(miou):
+                pair_ious.append(miou)
+        rep_iou = float(np.mean(pair_ious)) if pair_ious else np.nan
     if scene.dataset == "cmp-facade":
         rep_iou = np.nan
 
