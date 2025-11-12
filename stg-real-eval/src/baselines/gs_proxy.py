@@ -160,7 +160,15 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
     feats = _cluster_feats(rgb, depth, masks)
-    avg_sim = float(np.mean([np.dot(f, f) for f in feats])) if feats else 0.0
+    #avg_sim = float(np.mean([np.dot(f, f) for f in feats])) if feats else 0.0
+    if feats:
+        feats_arr = np.stack(feats, axis=0)
+        norms = np.linalg.norm(feats_arr, axis=1, keepdims=True) + 1e-8
+        feats_normed = feats_arr / norms
+        sims = feats_normed @ feats_normed.T          # pairwise cosine sims
+        avg_sim = float(np.nanmean(sims))             # mean of all pairwise sims
+    else:
+        avg_sim = 0.0
 
     # --- Output dict ---
     return {
