@@ -7,6 +7,9 @@ from PIL import Image
 from sklearn.cluster import KMeans
 
 
+# ---------------------------------------------------------------------
+# Basic helpers
+# ---------------------------------------------------------------------
 def _normalize01(arr: np.ndarray) -> np.ndarray:
     arr = arr.astype(np.float32)
     m, M = np.nanmin(arr), np.nanmax(arr)
@@ -18,7 +21,7 @@ def _normalize01(arr: np.ndarray) -> np.ndarray:
 def _read_depth_file(p: Path) -> np.ndarray:
     if p.suffix == ".npy":
         return np.load(p)
-    # PNG/EXR fallback (PIL reads PNG; EXR support may vary)
+    # PNG/EXR fallback (PIL handles PNG; EXR support may vary)
     return np.array(Image.open(p).convert("F"))
 
 
@@ -26,7 +29,7 @@ def _load_depth_from_cache(image_path: Path, depth_cache_dir: Path) -> np.ndarra
     """
     ONLY reads depth; never runs MiDaS.
     Tries: <stem>_midas.npy, <stem>.npy, <stem>.png, <stem>.exr in depth_cache_dir.
-    If not found, try the canonical '.../midas/' path under cache/.
+    If not found, tries canonical '.../midas/' under cache/.
     Falls back to 1 - grayscale(image) so the eval won’t crash.
     """
     stem = image_path.stem
@@ -37,7 +40,6 @@ def _load_depth_from_cache(image_path: Path, depth_cache_dir: Path) -> np.ndarra
         depth_cache_dir / f"{stem}.exr",
     ]
 
-    # also look under common midas cache roots
     for root in [Path("cache") / "block_b", Path("cache")]:
         cands.extend([
             root / "**" / "midas" / f"{stem}_midas.npy",
@@ -46,27 +48,27 @@ def _load_depth_from_cache(image_path: Path, depth_cache_dir: Path) -> np.ndarra
             root / "**" / "midas" / f"{stem}.exr",
         ])
 
-    # try direct hits first
     for p in cands:
         if "**" in str(p):
-            # best-effort recursive discovery
             try:
                 for hit in p.parents[2].rglob(p.name):
                     return _normalize01(_read_depth_file(hit))
             except Exception:
                 pass
-        else:
-            if p.exists():
-                try:
-                    return _normalize01(_read_depth_file(p))
-                except Exception:
-                    pass
+        elif p.exists():
+            try:
+                return _normalize01(_read_depth_file(p))
+            except Exception:
+                pass
 
-    # last resort — keep pipeline alive
+    # Last resort — synthetic grayscale fallback
     gray = np.array(Image.open(image_path).convert("L"), dtype=np.float32) / 255.0
     return 1.0 - gray
 
 
+# ---------------------------------------------------------------------
+# Geometry segmentation and descriptors
+# ---------------------------------------------------------------------
 def _depth_bands(depth: np.ndarray, k: int = 4) -> Tuple[List[np.ndarray], np.ndarray]:
     h, w = depth.shape
     X = depth.reshape(-1, 1)
@@ -100,8 +102,8 @@ def _dominant_repeats(masks: List[np.ndarray]) -> Tuple[int, int]:
 
     tx = (lab[:, 1:] != lab[:, :-1]).astype(np.float32)  # x-edges
     ty = (lab[1:, :] != lab[:-1, :]).astype(np.float32)  # y-edges
-    sx = tx.sum(axis=0)  # length w-1
-    sy = ty.sum(axis=1)  # length h-1
+    sx = tx.sum(axis=0)
+    sy = ty.sum(axis=1)
 
     def _fft_peak(sig: np.ndarray) -> int:
         sig = sig - np.nan_to_num(sig.mean(), nan=0.0)
@@ -112,13 +114,20 @@ def _dominant_repeats(masks: List[np.ndarray]) -> Tuple[int, int]:
             spec[0] = 0  # drop DC
         return int(np.argmax(spec)) if spec.size else 0
 
-    # ✅ return the pair of peaks
     return _fft_peak(sx), _fft_peak(sy)
 
 
 def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarray]) -> List[np.ndarray]:
-    """Per-band descriptors: 32-bin grayscale hist + depth mean/std (len=34)."""
-    gray = (0.299 * img_rgb[..., 0] + 0.587 * img_rgb[..., 1] + 0.114 * img_rgb[..., 2]).astype(np.float32) / 255.0
+    """
+    Per-band descriptors: 32-bin grayscale hist + depth mean/std (len=34).
+    These play the same role as DINO Cluster's region embeddings.
+    """
+    gray = (
+        0.299 * img_rgb[..., 0]
+        + 0.587 * img_rgb[..., 1]
+        + 0.114 * img_rgb[..., 2]
+    ).astype(np.float32) / 255.0
+
     feats = []
     for m in masks:
         if m.sum() < 10:
@@ -126,51 +135,52 @@ def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarra
             continue
         hist, _ = np.histogram(gray[m], bins=32, range=(0, 1), density=True)
         dvals = depth[m]
-        feats.append(np.concatenate([hist.astype(np.float32),
-                                     np.array([dvals.mean(), dvals.std()], dtype=np.float32)]))
+        feats.append(
+            np.concatenate(
+                [hist.astype(np.float32),
+                 np.array([dvals.mean(), dvals.std()], dtype=np.float32)]
+            )
+        )
     return feats
 
 
+# ---------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------
 def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) -> Dict[str, Any]:
     """
-    Plug-compatible entry point (structured like your DINO Cluster baseline).
+    Geometry-aware baseline mirroring DINO Cluster structure:
+      - produces cluster_feats (band-level descriptors)
+      - evaluator computes ΔSim, Purity, etc.
     """
     image_path = Path(image_path)
     depth_cache_dir = Path(depth_cache_dir)
 
-    # --- Load RGB ---
+    # --- RGB ---
     with Image.open(image_path) as im:
         rgb = np.array(im.convert("RGB"))
 
-    # --- Load and prepare depth ---
+    # --- Depth ---
     depth = _load_depth_from_cache(image_path, depth_cache_dir)
     depth = np.squeeze(depth)
     if depth.ndim != 2:
-        depth = depth[..., 0]  # final fallback
+        depth = depth[..., 0]
 
-    # 🔧 Resize depth to match RGB resolution (uses global Image import!)
+    # Resize depth to RGB resolution
     if depth.shape != rgb.shape[:2]:
         h, w = rgb.shape[:2]
-        depth_img = Image.fromarray(depth)
-        depth_resized = depth_img.resize((w, h), resample=Image.BILINEAR)
-        depth = np.array(depth_resized, dtype=np.float32)
+        depth = np.array(
+            Image.fromarray(depth).resize((w, h), resample=Image.BILINEAR),
+            dtype=np.float32,
+        )
 
-    # --- Core geometry clustering ---
+    # --- Structure inference ---
     masks, _ = _depth_bands(depth, k=4)
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
     feats = _cluster_feats(rgb, depth, masks)
-    #avg_sim = float(np.mean([np.dot(f, f) for f in feats])) if feats else 0.0
-    if feats:
-        feats_arr = np.stack(feats, axis=0)
-        norms = np.linalg.norm(feats_arr, axis=1, keepdims=True) + 1e-8
-        feats_normed = feats_arr / norms
-        sims = feats_normed @ feats_normed.T          # pairwise cosine sims
-        avg_sim = float(np.nanmean(sims))             # mean of all pairwise sims
-    else:
-        avg_sim = 0.0
 
-    # --- Output dict ---
+    # --- Return DINO-compatible dict (no avg_sim) ---
     return {
         "rules": [],
         "repeats": [int(rx), int(ry)],
@@ -178,6 +188,5 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
         "proxy_mask": (proxy.astype(np.uint8) * 255).tolist() if proxy is not None else None,
         "slot_masks": [m.astype(bool).tolist() for m in masks],
         "cluster_feats": [f.astype(np.float32).tolist() for f in feats],
-        "avg_sim": avg_sim,
+        # no avg_sim → evaluator handles ΔSim consistently
     }
-
