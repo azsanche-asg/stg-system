@@ -179,6 +179,20 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     proxy = _largest_band_mask(masks)
     rx, ry = _dominant_repeats(masks)
     feats = _cluster_feats(rgb, depth, masks)
+    
+    if feats:
+        feats_arr = np.stack(feats, axis=0)                    # (k, 34)
+        norms = np.linalg.norm(feats_arr, axis=1, keepdims=True) + 1e-8
+        feats_n = feats_arr / norms
+        sims = feats_n @ feats_n.T                             # (k, k) cosine
+        k = sims.shape[0]
+        if k > 1:
+            iu = np.triu_indices(k, k=1)
+            avg_sim = float(np.nanmean(sims[iu]))              # ~ 0.2–0.5 typical
+        else:
+            avg_sim = 0.0
+    else:
+        avg_sim = 0.0
 
     # --- Return DINO-compatible dict (no avg_sim) ---
     return {
@@ -188,5 +202,6 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
         "proxy_mask": (proxy.astype(np.uint8) * 255).tolist() if proxy is not None else None,
         "slot_masks": [m.astype(bool).tolist() for m in masks],
         "cluster_feats": [f.astype(np.float32).tolist() for f in feats],
+        "avg_sim": avg_sim, 
         # no avg_sim → evaluator handles ΔSim consistently
     }
