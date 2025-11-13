@@ -71,6 +71,10 @@ try:
 except Exception:  # pragma: no cover
     infer_gs_proxy = None
 try:
+    from stg_real_eval.baselines.gs_guided import infer_gs_guided
+except Exception:  # pragma: no cover
+    infer_gs_guided = None
+try:
     from stg_real_eval.baselines.slot_attention_proxy import infer_slot_baseline
 except Exception:  # pragma: no cover
     infer_slot_baseline = None
@@ -156,7 +160,7 @@ def run_scene(cfg, scene, results_dir: Path):
 
     if model_type in ("raster", "raster_crf"):
         pass
-    elif model_type in ("gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
+    elif model_type in ("gs_proxy", "gs_proxy_v2", "geo_depth_bands", "stsg_gs"):
         prev = os.environ.get("STG_FEATURES")
         os.environ["STG_FEATURES"] = "midas"
         try:
@@ -207,6 +211,40 @@ def run_scene(cfg, scene, results_dir: Path):
                 preds.append(pred)
             except Exception as exc:
                 print(f"⚠️ GS proxy failed for {fr.image_path}: {exc}")
+    elif model_type == "stsg_gs" and infer_gs_guided is not None:
+        print("🧩  STSG-guided GS baseline active")
+        cache_root = Path("cache") / "block_b" / scene.dataset / scene.scene_id
+        tmp_rules = []
+        for pil_img in pil_images:
+            try:
+                tmp_rules.append(infer_image(pil_img))
+            except Exception as exc:
+                print(f"⚠️ STSG pass failed: {exc}")
+                tmp_rules.append({"rules": [], "repeats": [1, 1]})
+        for st, fr, pil_img in zip(tmp_rules, frames, pil_images):
+            floors, repeats = 1, 1
+            rp = st.get("repeats")
+            if isinstance(rp, (list, tuple)) and len(rp) >= 2:
+                try:
+                    floors = max(1, int(rp[0]))
+                    repeats = max(1, int(rp[1]))
+                except Exception:
+                    floors, repeats = 1, 1
+            depth_file = cache_root / f"{Path(fr.image_path).stem}_midas.npy"
+            if not depth_file.exists():
+                print(f"⚠️ No MiDaS cache found for {fr.image_path}; using fallback mask.")
+                preds.append({"rules": st.get("rules", []), "repeats": [floors, repeats],
+                              "depth": 2, "proxy_mask": None, "slot_masks": [], "cluster_feats": [], "avg_sim": np.nan})
+                continue
+            try:
+                depth = np.load(depth_file)
+                depth = depth[0] if depth.ndim == 3 else depth
+                pred = infer_gs_guided(pil_img, depth, floors, repeats)
+            except Exception as exc:
+                print(f"⚠️ GS-guided proxy failed for {fr.image_path}: {exc}")
+                pred = {"rules": st.get("rules", []), "repeats": [floors, repeats],
+                        "depth": 2, "proxy_mask": None, "slot_masks": [], "cluster_feats": [], "avg_sim": np.nan}
+            preds.append(pred)
     elif model_type == "gs_proxy_v2":
         print("🧭  Geometry Proxy v2 baseline active – computing temporal ΔSim & Replay IoU")
         from stg_real_eval.baselines import gs_proxy_v2
@@ -335,7 +373,7 @@ def run_scene(cfg, scene, results_dir: Path):
     mask_seq = []
     if mask_seq_slot is not None:
         mask_seq = mask_seq_slot
-    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
+    elif model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands", "stsg_gs"):
         for pred in preds:
             proxy = pred.get("proxy_mask") if isinstance(pred, dict) else None
             if proxy is not None:
@@ -409,7 +447,7 @@ def run_scene(cfg, scene, results_dir: Path):
         rep_iou = np.nan
 
     feat_matrix = []
-    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands"):
+    if model_type in ("raster", "slot", "raster_crf", "dino_cluster", "gs_proxy", "gs_proxy_v2", "geo_depth_bands", "stsg_gs"):
         for fr in frames:
             with Image.open(fr.image_path) as _im:
                 gray = np.array(_im.convert("L"))
@@ -469,7 +507,7 @@ def run_scene(cfg, scene, results_dir: Path):
         frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
         if frame_sims:
             dsim = float(np.nanmean(frame_sims))
-    elif model_type == "gs_proxy":
+    elif model_type in ("gs_proxy", "stsg_gs"):
         frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
         if frame_sims and np.any(np.isfinite(frame_sims)):
             dsim = float(1.0 - np.nanmean(frame_sims))
