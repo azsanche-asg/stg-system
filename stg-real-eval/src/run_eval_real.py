@@ -461,7 +461,7 @@ def run_scene(cfg, scene, results_dir: Path):
                 feat_matrix.append(np.load(fpath).flatten())
 
     if not feat_matrix:
-        if model_type in ("dino_cluster", "gs_proxy"):
+        if model_type in ("dino_cluster", "gs_proxy", "stsg_gs"):
             pooled = []
             for pred in preds:
                 cf = pred.get("cluster_feats")
@@ -487,7 +487,8 @@ def run_scene(cfg, scene, results_dir: Path):
         except Exception:
             feat_matrix = None
 
-    if isinstance(feat_matrix, np.ndarray) and feat_matrix.ndim == 2 and feat_matrix.shape[0] >= 2:
+    if model_type not in ("dino_cluster", "gs_proxy", "stsg_gs") and \
+       isinstance(feat_matrix, np.ndarray) and feat_matrix.ndim == 2 and feat_matrix.shape[0] >= 2:
         try:
             dsim = float(delta_similarity(feat_matrix))
         except Exception:
@@ -498,8 +499,12 @@ def run_scene(cfg, scene, results_dir: Path):
             pur = float(purity(labels, labels.copy()))
         except Exception:
             pur = np.nan
-        dummy_mask = np.ones((64, 64))
-        fgrid = facade_grid_score(dummy_mask)
+        if mask_seq:
+            try:
+                agg = (np.stack([m.astype(np.uint8) for m in mask_seq], axis=0).mean(axis=0) > 0.5).astype(np.uint8)
+                fgrid = facade_grid_score(agg)
+            except Exception:
+                fgrid = np.nan
     else:
         dsim = pur = fgrid = np.nan
 
