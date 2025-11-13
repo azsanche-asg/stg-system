@@ -465,10 +465,17 @@ def run_scene(cfg, scene, results_dir: Path):
     else:
         dsim = pur = fgrid = np.nan
 
-    if model_type in ("dino_cluster", "gs_proxy"):
+    if model_type == "dino_cluster":
         frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
         if frame_sims:
             dsim = float(np.nanmean(frame_sims))
+    elif model_type == "gs_proxy":
+        frame_sims = [pred.get("avg_sim", np.nan) for pred in preds]
+        if frame_sims and np.any(np.isfinite(frame_sims)):
+            dsim = float(1.0 - np.nanmean(frame_sims))
+        else:
+            dsim = np.nan
+        pur = 1.0
 
     if external_metrics is not None:
         dsim, rep_iou = external_metrics
