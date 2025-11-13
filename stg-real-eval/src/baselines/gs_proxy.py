@@ -72,7 +72,7 @@ def _load_depth_from_cache(image_path: Path, depth_cache_dir: Path) -> np.ndarra
 def _depth_bands(depth: np.ndarray, k: int = 4) -> Tuple[List[np.ndarray], np.ndarray]:
     h, w = depth.shape
     X = depth.reshape(-1, 1)
-    km = KMeans(n_clusters=k, n_init=5, random_state=0)
+    km = KMeans(n_clusters=k, n_init=1, random_state=0)
     labels = km.fit_predict(X)
     centers = km.cluster_centers_.flatten()
     order = np.argsort(centers)  # near→far
@@ -131,9 +131,9 @@ def _cluster_feats(img_rgb: np.ndarray, depth: np.ndarray, masks: List[np.ndarra
     feats = []
     for m in masks:
         if m.sum() < 10:
-            feats.append(np.zeros(34, dtype=np.float32))
+            feats.append(np.zeros(10, dtype=np.float32))
             continue
-        hist, _ = np.histogram(gray[m], bins=32, range=(0, 1), density=True)
+        hist, _ = np.histogram(gray[m], bins=8, range=(0, 1), density=True)
         dvals = depth[m]
         feats.append(
             np.concatenate(
@@ -181,16 +181,12 @@ def run_gs_proxy_for_frame(image_path: str | Path, depth_cache_dir: str | Path) 
     feats = _cluster_feats(rgb, depth, masks)
     
     if feats:
-        feats_arr = np.stack(feats, axis=0)                    # (k, 34)
+        feats_arr = np.stack(feats, axis=0)
         norms = np.linalg.norm(feats_arr, axis=1, keepdims=True) + 1e-8
         feats_n = feats_arr / norms
-        sims = feats_n @ feats_n.T                             # (k, k) cosine
+        sims = feats_n @ feats_n.T
         k = sims.shape[0]
-        if k > 1:
-            iu = np.triu_indices(k, k=1)
-            avg_sim = float(np.nanmean(sims[iu]))              # ~ 0.2–0.5 typical
-        else:
-            avg_sim = 0.0
+        avg_sim = float(np.mean(sims[np.triu_indices(k, 1)])) if k > 1 else 0.0
     else:
         avg_sim = 0.0
 
