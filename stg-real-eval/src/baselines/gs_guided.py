@@ -91,4 +91,4 @@ def infer_gs_guided(pil_img: Image.Image, depth_np: np.ndarray, floors: int, rep
         "cluster_feats": [f.tolist() for f in feats],
         "avg_sim": avg_sim,
     }
-*** End Scripts
+
